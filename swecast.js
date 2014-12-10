@@ -262,31 +262,12 @@ var handlers = {
 
 	},
 	'www.tv4.se': function(){
-		var videos = document.evaluate('//figure[string(@data-video-id)]', document, null, XPathResult.UNORDERED_NODE_ITERATOR_TYPE, null);
-		var item;
-		var elements = [];
-		while (item = videos.iterateNext()) {
-	    	elements.push($(item));
-		}
-
-
-		elements.forEach(function(v){
-			var videoid = v.attr('data-video-id');
-			var cc = $('<img src="http://upload.wikimedia.org/wikipedia/commons/thumb/2/26/Chromecast_cast_button_icon.svg/294px-Chromecast_cast_button_icon.svg.png"/>');
-			cc.css({
-				width: '30px',
-				position: 'absolute',
-				backgroundColor: '#fff',
-				padding: 2,
-				top: 0,
-				left: 0
-			}).click(function(e){
-				e.stopPropagation();
-				e.preventDefault();
-				$.ajax('https://prima.tv4play.se/api/mobil/asset/'+videoid+'/play?protocol=hls&videoFormat=MP4+WEBVTTS',{
+		util.eachXpath('//figure[@data-video-id]', function(el){
+			util.castBtn(el, function(){
+				$.ajax('https://prima.tv4play.se/api/mobil/asset/'+el.attr('data-video-id')+'/play?protocol=hls&videoFormat=MP4+WEBVTTS',{
 					success: function(data){
 						var title = $(data).find('title').first().text();
-					  $(data).find('url').each(function(i, url){
+					  	$(data).find('url').each(function(i, url){
 					    if (i == 0) {
 					    	var url = $(this).text();
 					    	ChromeCastApi.play(url, title);
@@ -295,7 +276,6 @@ var handlers = {
 					}
 				});
 			});
-			cc.appendTo(v);
 		});
 	},
 	'www.svt.se': function(){
