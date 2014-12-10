@@ -27,6 +27,7 @@ if (!window.ChromeCastApi) {
 
 		sessionListener: function(e) {
 			this.session = e;
+			this.setStatus('Connected');
 			if (this.session.media.length != 0) {
 				this.onMediaDiscovered(this.session.media[0]);
 		  	} else if (this.requestUrl != null) {
@@ -37,7 +38,7 @@ if (!window.ChromeCastApi) {
 		receiverListener: function(e) {
 			this.setStatus('reciever listener');
 			if( e === chrome.cast.ReceiverAvailability.AVAILABLE) {
-				this.setStatus('available');
+				this.setStatus('Select your chome cast');
 				chrome.cast.requestSession(this.sessionListener.bind(this), this.showError.bind(this));
 			} else {
 				this.setStatus('Unavailable, turn on your chrome cast');
@@ -131,7 +132,7 @@ if (!window.ChromeCastApi) {
 					position: 'fixed',
 					top: '0px',
 					left: '25%',
-					width: '300px',
+					width: '320px',
 					padding: '5px',
 					height: '40px',
 					backgroundColor: '#000',
@@ -149,11 +150,19 @@ if (!window.ChromeCastApi) {
 				this.statusWindow.progress = $('<div>');
 				this.statusWindow.progress.appendTo(this.statusWindow);
 				this.statusWindow.progressText = $('<span>00:00:00</span>');
+				this.statusWindow.progressText.css({
+					minWidth: '60px',
+					display: 'inline-block'
+				});
 				this.statusWindow.progressText.appendTo(this.statusWindow.progress);
 				this.statusWindow.progressBar = $('<progress value="0" max="100"></progress>');
 				this.statusWindow.progressBar.click(this.seek.bind(this));
 				this.statusWindow.progressBar.appendTo(this.statusWindow.progress);
 				this.statusWindow.progressTotal = $('<span>00:00:00</span>');
+				this.statusWindow.progressTotal.css({
+					minWidth: '60px',
+					display: 'inline-block'
+				});
 				this.statusWindow.progressTotal.appendTo(this.statusWindow.progress);
 				//$('<br>').appendTo(this.statusWindow);
 				this.statusWindow.playPauseBtn = $('<button/>');
@@ -181,15 +190,17 @@ if (!window.ChromeCastApi) {
 		},
 
 		seek: function(ev) {
-			var el = $(ev.target);
-		    var x = ev.clientX - el.offset().left;
-		    var w = el.width();
-		    var relX = x/w;
-		    var dur = this.currentMedia.media.duration;
-		    var pos = dur * relX;
-		    var req = new chrome.cast.media.SeekRequest();
-		    req.currentTime = pos;
-		    this.currentMedia.seek(req);
+			if (this.currentMedia) {
+				var el = $(ev.target);
+			    var x = ev.clientX - el.offset().left;
+			    var w = el.width();
+			    var relX = x/w;
+			    var dur = this.currentMedia.media.duration;
+			    var pos = dur * relX;
+			    var req = new chrome.cast.media.SeekRequest();
+			    req.currentTime = pos;
+			    this.currentMedia.seek(req);
+			}
 		},
 
 		setStatus: function(msg) {
@@ -205,7 +216,6 @@ if (!window.ChromeCastApi) {
 						this.receiverListener.bind(this));
 					chrome.cast.initialize(apiConfig, this.initialized.bind(this), this.showError.bind(this));
 				} else {
-			window.location.hash="6";
 				  this.noCast = true;
 				}
 			}.bind(this);
@@ -216,47 +226,95 @@ if (!window.ChromeCastApi) {
 
 ChromeCastApi.init();
 
+var util = {
+	eachXpath: function(xpath, fn) {
+		var it = document.evaluate(xpath, document, null, XPathResult.UNORDERED_NODE_ITERATOR_TYPE, null);
+		var item;
+		var elements = [];
+		while (item = it.iterateNext()) {
+	    	elements.push($(item));
+		}
 
-function loadTv4Video() {
-	var videos = document.evaluate('//figure[string(@data-video-id)]', document, null, XPathResult.UNORDERED_NODE_ITERATOR_TYPE, null);
-	var item;
-	var elements = [];
-	while (item = videos.iterateNext()) {
-    	elements.push($(item));
-	}
-
-
-	elements.forEach(function(v){
-		var videoid = v.attr('data-video-id');
-		var cc = $('<img src="http://upload.wikimedia.org/wikipedia/commons/thumb/2/26/Chromecast_cast_button_icon.svg/294px-Chromecast_cast_button_icon.svg.png"/>');
-		cc.css({
+		elements.forEach(fn);		
+	},
+	castBtn: function(el, fn) {
+		$('<img src="http://upload.wikimedia.org/wikipedia/commons/thumb/2/26/Chromecast_cast_button_icon.svg/294px-Chromecast_cast_button_icon.svg.png"/>')
+		.css({
 			width: '30px',
 			position: 'absolute',
 			backgroundColor: '#fff',
 			padding: 2,
 			top: 0,
-			left: 0
-		}).click(function(e){
+			left: 0,
+			zIndex: 10000
+		})
+		.click(function(e){
 			e.stopPropagation();
-			$.ajax('https://prima.tv4play.se/api/mobil/asset/'+videoid+'/play?protocol=hls&videoFormat=MP4+WEBVTTS',{
-				success: function(data){
-					var title = $(data).find('title').first().text();
-				  $(data).find('url').each(function(i, url){
-				    if (i == 0) {
-				    	var url = $(this).text();
-				    	ChromeCastApi.play(url, title);
-				    }
-				  });
-				}
+			e.preventDefault();
+			fn.call();
+		})
+		.appendTo(el);
+	}
+};
+
+var handlers = {
+	defaultHandler: function(){
+
+	},
+	'www.tv4.se': function(){
+		var videos = document.evaluate('//figure[string(@data-video-id)]', document, null, XPathResult.UNORDERED_NODE_ITERATOR_TYPE, null);
+		var item;
+		var elements = [];
+		while (item = videos.iterateNext()) {
+	    	elements.push($(item));
+		}
+
+
+		elements.forEach(function(v){
+			var videoid = v.attr('data-video-id');
+			var cc = $('<img src="http://upload.wikimedia.org/wikipedia/commons/thumb/2/26/Chromecast_cast_button_icon.svg/294px-Chromecast_cast_button_icon.svg.png"/>');
+			cc.css({
+				width: '30px',
+				position: 'absolute',
+				backgroundColor: '#fff',
+				padding: 2,
+				top: 0,
+				left: 0
+			}).click(function(e){
+				e.stopPropagation();
+				e.preventDefault();
+				$.ajax('https://prima.tv4play.se/api/mobil/asset/'+videoid+'/play?protocol=hls&videoFormat=MP4+WEBVTTS',{
+					success: function(data){
+						var title = $(data).find('title').first().text();
+					  $(data).find('url').each(function(i, url){
+					    if (i == 0) {
+					    	var url = $(this).text();
+					    	ChromeCastApi.play(url, title);
+					    }
+					  });
+					}
+				});
+			});
+			cc.appendTo(v);
+		});
+	},
+	'www.svt.se': function(){
+		util.eachXpath('//a[@data-json-href]', function(el){
+			util.castBtn(el, function(){
+				$.ajax(el.attr('data-json-href'),{
+					success: function(data){
+						var url = data.video.videoReferences.forEach(function(ref){
+							if (ref.playerType === 'ios') {
+								ChromeCastApi.play(ref.url, data.context.title);
+							}
+						});
+					}
+				});
 			});
 		});
-		cc.appendTo(v);
-	});
-
-	return;
+	}
 }
 
-if (window.location.host == 'www.tv4.se') {
-	loadTv4Video();
-}
+var handler = handlers[window.location.host] || handlers.defaultHandler;
 
+handler.call();
