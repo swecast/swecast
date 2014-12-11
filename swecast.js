@@ -136,7 +136,8 @@ if (!window.ChromeCastApi) {
 					padding: '5px',
 					height: '40px',
 					backgroundColor: '#000',
-					color: '#fff'
+					color: '#fff',
+					zIndex: 10000
 				});
 				
 				this.statusWindow.statusText = $('<div>');
@@ -283,7 +284,7 @@ var handlers = {
 			util.castBtn(el, function(){
 				$.ajax(el.attr('data-json-href'),{
 					success: function(data){
-						var url = data.video.videoReferences.forEach(function(ref){
+						data.video.videoReferences.forEach(function(ref){
 							if (ref.playerType === 'ios') {
 								ChromeCastApi.play(ref.url, data.context.title);
 							}
@@ -292,9 +293,34 @@ var handlers = {
 				});
 			});
 		});
+	},
+	'www.svtplay.se': 'www.svt.se',
+	'www.kanal5play.se': function() {
+		var videoRegex = /video\/(\d+)\|/g;
+		var videoId = videoRegex.exec(window.location.hash);
+		if (videoId && videoId.length == 2) {
+			videoId = videoId[1];
+			util.eachXpath('//div[@class=\'sbs-player-home\']', function(el){
+				util.castBtn(el, function(){
+					$.ajax('http://www.kanal5play.se/api/getVideo?format=IPAD&videoId='+videoId, {
+						success: function (data) {
+							data.streams.forEach(function(ref){
+								if (ref.format === 'IPAD') {
+									ChromeCastApi.play(ref.source, data.title);
+								}
+							});
+						}
+					});
+				});
+			});
+		}
 	}
 }
 
 var handler = handlers[window.location.host] || handlers.defaultHandler;
+
+if (typeof handler === 'string') {
+	handler = handlers[handler];
+}
 
 handler.call();
