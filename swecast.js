@@ -137,7 +137,7 @@ if (!window.ChromeCastApi) {
 					height: '40px',
 					backgroundColor: '#000',
 					color: '#fff',
-					zIndex: 10000
+					zIndex: 999999
 				});
 				
 				this.statusWindow.statusText = $('<div>');
@@ -207,15 +207,23 @@ if (!window.ChromeCastApi) {
 		setStatus: function(msg) {
 			this.statusWindow.statusText.text(msg);
 		},
+
+		initCast: function(){
+			var sessionRequest = new chrome.cast.SessionRequest(chrome.cast.media.DEFAULT_MEDIA_RECEIVER_APP_ID);
+			var apiConfig = new chrome.cast.ApiConfig(sessionRequest,
+				this.sessionListener.bind(this),
+				this.receiverListener.bind(this));
+			chrome.cast.initialize(apiConfig, this.initialized.bind(this), this.showError.bind(this));
+		},
 	
 		init: function() {
+			if (window.chrome && window.chrome.cast && window.chrome.cast.isAvailable) {
+				this.initCast();
+			}
+
 			window['__onGCastApiAvailable'] = function(loaded, errorInfo) {
 				if (loaded) {
-					var sessionRequest = new chrome.cast.SessionRequest(chrome.cast.media.DEFAULT_MEDIA_RECEIVER_APP_ID);
-					var apiConfig = new chrome.cast.ApiConfig(sessionRequest,
-						this.sessionListener.bind(this),
-						this.receiverListener.bind(this));
-					chrome.cast.initialize(apiConfig, this.initialized.bind(this), this.showError.bind(this));
+					this.initCast();
 				} else {
 				  this.noCast = true;
 				}
@@ -282,7 +290,7 @@ var handlers = {
 	'www.svt.se': function(){
 		util.eachXpath('//a[@data-json-href]', function(el){
 			util.castBtn(el, function(){
-				$.ajax(el.attr('data-json-href'),{
+				$.ajax(el.attr('data-json-href')+'?output=json',{
 					success: function(data){
 						data.video.videoReferences.forEach(function(ref){
 							if (ref.playerType === 'ios') {
