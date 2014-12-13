@@ -212,22 +212,25 @@ if (!window.ChromeCastApi) {
 			var sessionRequest = new chrome.cast.SessionRequest(chrome.cast.media.DEFAULT_MEDIA_RECEIVER_APP_ID);
 			var apiConfig = new chrome.cast.ApiConfig(sessionRequest,
 				this.sessionListener.bind(this),
-				this.receiverListener.bind(this));
+				this.receiverListener.bind(this),
+				chrome.cast.AutoJoinPolicy.ORIGIN_SCOPED,
+				chrome.cast.DefaultActionPolicy.CREATE_SESSION);
 			chrome.cast.initialize(apiConfig, this.initialized.bind(this), this.showError.bind(this));
 		},
 	
 		init: function() {
 			if (window.chrome && window.chrome.cast && window.chrome.cast.isAvailable) {
 				this.initCast();
+				chrome.cast.requestSession(this.sessionListener.bind(this), this.showError.bind(this));
+			} else {
+				window['__onGCastApiAvailable'] = function(loaded, errorInfo) {
+					if (loaded) {
+						this.initCast();
+					} else {
+					  this.noCast = true;
+					}
+				}.bind(this);
 			}
-
-			window['__onGCastApiAvailable'] = function(loaded, errorInfo) {
-				if (loaded) {
-					this.initCast();
-				} else {
-				  this.noCast = true;
-				}
-			}.bind(this);
 		}
 
 	};
@@ -304,24 +307,66 @@ var handlers = {
 	},
 	'www.svtplay.se': 'www.svt.se',
 	'www.kanal5play.se': function() {
-		var videoRegex = /video\/(\d+)\|/g;
-		var videoId = videoRegex.exec(window.location.hash);
-		if (videoId && videoId.length == 2) {
-			videoId = videoId[1];
-			util.eachXpath('//div[@class=\'sbs-player-home\']', function(el){
+		var prefix = 'video/';
+		var start = window.location.hash.lastIndexOf(prefix);
+		if (start == -1) {
+			return;
+		}
+		var videoId = window.location.hash.substring(start+prefix.length);
+		var end = videoId.indexOf('|');
+		if (end != -1) {
+			videoId = videoId.substring(0,end);
+		}
+		util.eachXpath('//div[@class=\'sbs-player-home\']', function(el){
+			util.castBtn(el, function(){
+				$.ajax('/api/getVideo?format=IPAD&videoId='+videoId, {
+					success: function (data) {
+						data.streams.forEach(function(ref){
+							if (ref.format === 'IPAD') {
+								ChromeCastApi.play(ref.source, data.title);
+							}
+						});
+					}
+				});
+			});
+		});
+	},
+	'www.kanal9play.se': 'www.kanal5play.se',
+	'www.kanal11play.se': 'www.kanal5play.se',
+	'www.tv3play.se': function(){
+		var videoId = window.location.pathname;
+		videoId = videoId.substring(videoId.lastIndexOf('/')+1);
+		if (videoId && parseInt(videoId)) {
+			util.eachXpath('//div[@class=\'video-player-content\']', function(el){
 				util.castBtn(el, function(){
-					$.ajax('http://www.kanal5play.se/api/getVideo?format=IPAD&videoId='+videoId, {
+					$.ajax('http://playapi.mtgx.tv/v1/videos/stream/'+videoId, {
 						success: function (data) {
-							data.streams.forEach(function(ref){
-								if (ref.format === 'IPAD') {
-									ChromeCastApi.play(ref.source, data.title);
-								}
-							});
+							ChromeCastApi.play(data.streams.hls, document.title);
 						}
 					});
 				});
 			});
 		}
+	},
+	'www.tv6play.se': 'www.tv3play.se',
+	'www.tv8play.se': 'www.tv3play.se',
+	'www.tv10play.se': 'www.tv3play.se',
+	'www.swefilmer.com': function() {
+		util.eachXpath('//div[@id=\'tabCtrl\']//iframe', function(el){
+			el.parent().css({
+				position: 'absolute'
+			});
+			util.castBtn(el.parent(), function(){
+				alert('The video will replace this window. Run the Swecast bookmarklet again.');
+				window.location.href = el.attr('src');
+			});
+		});
+	},
+	'vidor.me': function(){
+		util.eachXpath('//iframe', function(el){
+			window.location.href = el.attr('src');
+			alert('The video will replace this window. Run the Swecast bookmarklet one more time.');
+		});
 	}
 }
 
