@@ -23,6 +23,19 @@ if (!window.SweCast) {
 			elements.forEach(fn);		
 		},
 		castBtn: function(el, fn) {
+			if (navigator.userAgent.match(/(iPod|iPhone|iPad)/)) {
+				var vid = el.children('video');
+				if (vid) {
+					vid.css({
+						'border-top': '30px solid black'
+					}).on('play', function(){
+						vid.css({
+							'border-top': ''
+						});
+					});
+				}
+			}
+
 			$('<img src="http://upload.wikimedia.org/wikipedia/commons/thumb/2/26/Chromecast_cast_button_icon.svg/294px-Chromecast_cast_button_icon.svg.png"/>')
 			.css({
 				width: '30px',
@@ -31,7 +44,8 @@ if (!window.SweCast) {
 				padding: 2,
 				top: 0,
 				left: 0,
-				zIndex: 10000
+				zIndex: 99999,
+				cursor:'pointer'
 			})
 			.click(function(e){
 				e.stopPropagation();
@@ -343,7 +357,19 @@ if (!window.SweCast) {
 
 		handlers: {
 			defaultHandler: function(){
-				SweCast.logUnsupported();
+				var videoFound = false;
+				util.eachXpath('//video', function(el){
+					videoFound = true;
+					var w = el.wrap('<div style="position: absolute;"></div>').parent();
+					util.castBtn(w, function(){
+						var src = el.attr('src') || el.children('source[type=\'video/mp4\']').attr('src');
+				    	SweCast.play(src, document.title);
+					});
+				});
+
+				if (!videoFound) {
+					SweCast.logUnsupported();					
+				}
 			},
 			'www.tv4.se': function(){
 				util.eachXpath('//figure[@data-video-id]', function(el){
@@ -364,7 +390,7 @@ if (!window.SweCast) {
 				util.eachXpath('//a[@data-json-href]', function(el){
 					util.castBtn(el, function(){
 						util.ajax(el.attr('data-json-href')+'?output=json',function(data){
-							data.video.videoReferences.forEach(function(ref){
+							$.each(data.video.videoReferences, function(i, ref){
 								if (ref.playerType === 'ios') {
 									SweCast.play(ref.url, data.context.title);
 								}
