@@ -460,7 +460,7 @@ if (!window.SweCast) {
 				}
 
 				var el = util.xpath('//param[@name=\'FlashVars\']');
-				if (el) {
+				if (el && el.attr('value')) {
 					var vars = util.queryDecode(el.attr('value'));
 					var url = vars['proxy.link'];
 					var regex = /proxy.link=(.*?)&/g;
