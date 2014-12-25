@@ -3,7 +3,13 @@ function loadScript(url, cb) {
   s=document.createElement('script');
 	s.type='text/javascript';
 	s.src=url;
-	s.onload = cb;
+	s.onload = function(e){
+		e.stopPropagation();
+		e.preventDefault();
+		if (cb) {
+			cb();
+		}
+	}
 	document.body.appendChild(s);
 }
 
@@ -22,18 +28,24 @@ if (!window.SweCast) {
 
 			elements.forEach(fn);		
 		},
+		castIframe: function(urlPrefix) {
+			util.eachXpath('//iframe[starts-with(@src, \''+urlPrefix+'\')]', function(el){
+				util.castBtn(el.parent(), function(){
+					alert('Run the Swecast bookmarklet again.');
+					window.location.href = el.attr('src');
+				});
+			});
+		},
 		castBtn: function(el, fn) {
-			if (navigator.userAgent.match(/(iPod|iPhone|iPad)/)) {
-				var vid = el.children('video');
-				if (vid) {
+			var vid = el.children('video');
+			if (vid) {
+				vid.css({
+					'border-top': '30px solid black'
+				}).on('play', function(){
 					vid.css({
-						'border-top': '30px solid black'
-					}).on('play', function(){
-						vid.css({
-							'border-top': ''
-						});
+						'border-top': ''
 					});
-				}
+				});
 			}
 
 			$('<img src="http://upload.wikimedia.org/wikipedia/commons/thumb/2/26/Chromecast_cast_button_icon.svg/294px-Chromecast_cast_button_icon.svg.png"/>')
@@ -127,7 +139,9 @@ if (!window.SweCast) {
 
 			this.currentMedia = media;
 
-			this.statusWindow.statusText.text(this.currentMedia.media.metadata.title);
+			if (this.currentMedia.media.metadata) {
+				this.statusWindow.statusText.text(this.currentMedia.media.metadata.title);
+			}
 
 			var dur = this.currentMedia.media.duration;
 			this.statusWindow.progressBar.attr('max', dur);
@@ -169,19 +183,24 @@ if (!window.SweCast) {
 		},
 		
 		playPause: function(e) {
-		  if (this.currentMedia.playerState == 'PLAYING') {
+			if (!this.currentMedia) {
+				chrome.cast.requestSession(this.sessionListener.bind(this), this.showError.bind(this));
+				return;
+			}
+		  	if (this.currentMedia.playerState == 'PLAYING') {
 				this.currentMedia.pause(null, null, this.showError.bind(this));
 			} else {
 				this.currentMedia.play(null, null, this.showError.bind(this));
 			}
 		},
 
-		play: function(url, title) {
-		  this.requestUrl = url;
-		  this.requestTitle = title;
-		  if (this.noCast === true) {
-		  	window.location = url;
-		  } else if (this.session) {
+		play: function(url, title, authUrl) {
+		  	this.requestUrl = url;
+		  	this.requestTitle = title;
+		  	this.requestAuthUrl = authUrl;
+		  	if (this.noCast === true) {
+		  		window.location = url;
+		  	} else if (this.session) {
 				this.loadVideo();
 			}
 		},
@@ -192,12 +211,16 @@ if (!window.SweCast) {
 			var mediaInfo = new chrome.cast.media.MediaInfo(this.requestUrl, "video/mp4");
 			mediaInfo.metadata = new chrome.cast.media.MovieMediaMetadata();
 			mediaInfo.metadata.title = this.requestTitle;
-      		
+			if (this.requestAuthUrl) {
+				mediaInfo.metadata.images = [new chrome.cast.Image(this.requestAuthUrl)];
+			}
+
       		var request = new chrome.cast.media.LoadRequest(mediaInfo);
 			this.session.loadMedia(request, this.onMediaDiscovered.bind(this), this.showError.bind(this));
 			this.logVideo(this.requestUrl);
 			this.requestUrl = null;
 			this.requestTitle = null;
+			this.requestAuthUrl = null;
 		},
 		
 		initialized: function() {
@@ -294,8 +317,11 @@ if (!window.SweCast) {
 		},
 	
 		init: function() {
-
-			var handler = this.handlers[window.location.host] || this.handlers.defaultHandler;
+			var hostname = window.location.host;
+			if (hostname.indexOf('www.') === 0) {
+				hostname = hostname.substring(4);
+			}
+			var handler = this.handlers[hostname] || this.handlers.defaultHandler;
 
 			if (typeof handler === 'string') {
 				handler = this.handlers[handler];
@@ -371,7 +397,7 @@ if (!window.SweCast) {
 					SweCast.logUnsupported();					
 				}
 			},
-			'www.tv4.se': function(){
+			'tv4.se': function(){
 				util.eachXpath('//figure[@data-video-id]', function(el){
 					util.castBtn(el, function(){
 						util.ajax('https://prima.tv4play.se/api/mobil/asset/'+el.attr('data-video-id')+'/play?protocol=hls&videoFormat=MP4+WEBVTTS', function(data){
@@ -386,7 +412,7 @@ if (!window.SweCast) {
 					});
 				});
 			},
-			'www.svt.se': function(){
+			'svt.se': function(){
 				util.eachXpath('//a[@data-json-href]', function(el){
 					util.castBtn(el, function(){
 						util.ajax(el.attr('data-json-href')+'?output=json',function(data){
@@ -399,8 +425,8 @@ if (!window.SweCast) {
 					});
 				});
 			},
-			'www.svtplay.se': 'www.svt.se',
-			'www.kanal5play.se': function() {
+			'svtplay.se': 'svt.se',
+			'kanal5play.se': function() {
 				var prefix = 'video/';
 				var start = window.location.hash.lastIndexOf(prefix);
 				if (start == -1) {
@@ -423,9 +449,9 @@ if (!window.SweCast) {
 					});
 				});
 			},
-			'www.kanal9play.se': 'www.kanal5play.se',
-			'www.kanal11play.se': 'www.kanal5play.se',
-			'www.tv3play.se': function(){
+			'kanal9play.se': 'kanal5play.se',
+			'kanal11play.se': 'kanal5play.se',
+			'tv3play.se': function(){
 				var videoId = window.location.pathname;
 				videoId = videoId.substring(videoId.lastIndexOf('/')+1);
 				if (videoId && parseInt(videoId)) {
@@ -438,10 +464,10 @@ if (!window.SweCast) {
 					});
 				}
 			},
-			'www.tv6play.se': 'www.tv3play.se',
-			'www.tv8play.se': 'www.tv3play.se',
-			'www.tv10play.se': 'www.tv3play.se',
-			'www.swefilmer.com': function() {
+			'tv6play.se': 'tv3play.se',
+			'tv8play.se': 'tv3play.se',
+			'tv10play.se': 'tv3play.se',
+			'swefilmer.com': function() {
 				util.eachXpath('//div[@id=\'tabCtrl\']//iframe', function(el){
 					el.parent().css({
 						position: 'absolute'
@@ -451,6 +477,23 @@ if (!window.SweCast) {
 						window.location.href = el.attr('src');
 					});
 				});
+			},
+			'dreamfilm.se': function() {
+				util.castIframe('http://videoapi.my.mail.ru');
+			},
+			'videoapi.my.mail.ru': function(){
+				var el = util.xpath('//param[@name=\'flashvars\']');
+				if (el) {
+					var vars = el.attr('value');
+					var vars = util.queryDecode(vars);
+					var url = vars['metadataUrl'];
+					util.ajax(url, function(data){
+						data = $.parseJSON(data);
+						var lastVideo = data.videos.pop();
+						SweCast.play(lastVideo.url, data.meta.title, url);
+					});
+					return;
+				}
 			},
 			'vidor.me': function(){
 				if (window.jwplayer) {
@@ -494,7 +537,7 @@ if (!window.chrome || !window.chrome.cast) {
 	loadScript('https://www.gstatic.com/cv/js/sender/v1/cast_sender.js');
 }
 
-if (!window.jQuery) {
+if (!window['$']) {
 	loadScript('http://code.jquery.com/jquery-2.1.1.min.js', SweCast.init.bind(SweCast));
 } else {
 	SweCast.init();
