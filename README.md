@@ -11,6 +11,7 @@ Gör det möjligt att stream svenska play-tjänster från webbläsaren Chrome p�
 - Kanal9
 - TV10
 - Swefilmer
+- Dreamfilm
 
 Du lägger in programmet i form av ett bokmärke. När du är inne på sidan som har den video du vill skicka så aktiverar du bokmärket. Videos på sidan får då en cast-ikon som du klickar på för att skicka till TVn. I övre delen av sidan kan du se vad som spelas samt pausa, stoppa, söka.
 
