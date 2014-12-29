@@ -26,7 +26,7 @@ if (!window.SweCast) {
 		    	elements.push($(item));
 			}
 
-			elements.forEach(fn);		
+			elements.forEach(fn);
 		},
 		castIframe: function(urlPrefix) {
 			util.eachXpath('//iframe[starts-with(@src, \''+urlPrefix+'\')]', function(el){
@@ -37,23 +37,21 @@ if (!window.SweCast) {
 			});
 		},
 		castBtn: function(el, fn) {
-			var vid = el.children('video');
-			if (vid) {
-				vid.css({
-					'border-top': '30px solid black'
-				}).on('play', function(){
-					vid.css({
-						'border-top': ''
-					});
-				});
-			}
+			//el.css({
+			//	'borderTop': '30px solid black'
+			//});
 
-			$('<img src="http://upload.wikimedia.org/wikipedia/commons/thumb/2/26/Chromecast_cast_button_icon.svg/294px-Chromecast_cast_button_icon.svg.png"/>')
+			var bar = $('<div>')
+			.css({
+				width: '100%',
+				backgroundColor: '#000'
+			});
+
+			$('<img src="https://raw.githubusercontent.com/googlecast/CastHelloVideo-chrome/master/images/cast_icon_idle.png"/>')
 			.css({
 				width: '30px',
-				position: 'absolute',
-				backgroundColor: '#fff',
-				padding: 2,
+				position: 'relative',
+				backgroundColor: '#000',
 				top: 0,
 				left: 0,
 				zIndex: 99999,
@@ -63,8 +61,9 @@ if (!window.SweCast) {
 				e.stopPropagation();
 				e.preventDefault();
 				fn.call();
-			})
-			.appendTo(el);
+			}).appendTo(bar);
+
+			bar.insertBefore(el);
 		},
 		queryDecode: function(query) {
 			var a = query.split('&');
@@ -108,7 +107,7 @@ if (!window.SweCast) {
 		  if (e.code == 'cancel') {
 		  	return;
 		  }
-		  this.setStatus('Error: '+e.code+''+e.description+e.details);
+		  this.setStatus('Error: '+e.code+''+e.description+(e.details ? JSON.stringify(e.details) : ''));
 		},
 
 		sessionListener: function(e) {
@@ -199,7 +198,17 @@ if (!window.SweCast) {
 		  	this.requestTitle = title;
 		  	this.requestAuthUrl = authUrl;
 		  	if (this.noCast === true) {
-		  		window.location = url;
+		  		var body = $(document.body);
+		  		body.empty();
+		  		var vid = $('<video src="'+url+'" controls></video>');
+		  		if (authUrl) {
+		  			vid.attr('poster',authUrl);
+		  		}
+		  		vid.css({
+			  			width: '90%',
+			  			height: '90%'
+			  		});
+		  		vid.appendTo(body);
 		  	} else if (this.session) {
 				this.loadVideo();
 			}
@@ -234,6 +243,9 @@ if (!window.SweCast) {
 					padding: '5px',
 					height: '40px',
 					backgroundColor: '#000',
+					fontSize: '12px',
+					fontWeight: 'bold',
+					boxSizing: 'content-box',
 					color: '#fff',
 					zIndex: 999999
 				});
@@ -270,7 +282,9 @@ if (!window.SweCast) {
 				  .html('&#9654;')
 				  .width(25)
 				  .css({
-				  	margin: '2px'
+				  	color: '#000',
+				  	margin: '2px',
+				  	padding: 0
 				  })
 				  .click(this.playPause.bind(this))
 				  .appendTo(this.statusWindow.progress);
@@ -279,7 +293,9 @@ if (!window.SweCast) {
 				  .html('&#9726;')
 				  .width(25)
 				  .css({
-				  	margin: '2px'
+				  	color: '#000',
+				  	margin: '2px',
+				  	padding: 0
 				  })
 				  .click(this.stop.bind(this))
 				  .appendTo(this.statusWindow.progress);
@@ -307,7 +323,7 @@ if (!window.SweCast) {
 		},
 
 		initCast: function(){
-			var sessionRequest = new chrome.cast.SessionRequest(chrome.cast.media.DEFAULT_MEDIA_RECEIVER_APP_ID);
+			var sessionRequest = new chrome.cast.SessionRequest(chrome.cast.media.DEFAULT_MEDIA_RECEIVER_APP_ID);//'74C7E5DC');//chrome.cast.media.DEFAULT_MEDIA_RECEIVER_APP_ID);
 			var apiConfig = new chrome.cast.ApiConfig(sessionRequest,
 				this.sessionListener.bind(this),
 				this.receiverListener.bind(this),
@@ -330,14 +346,18 @@ if (!window.SweCast) {
 			handler.call();
 
 			if (window.chrome && window.chrome.cast && window.chrome.cast.isAvailable) {
-				this.initCast();
-				chrome.cast.requestSession(this.sessionListener.bind(this), this.showError.bind(this));
+				if (window.chrome.cast.isAvailable) {
+					this.initCast();
+					chrome.cast.requestSession(this.sessionListener.bind(this), this.showError.bind(this));
+				} else {
+					this.noCast = true;
+				}
 			} else {
 				window['__onGCastApiAvailable'] = function(loaded, errorInfo) {
 					if (loaded) {
 						this.initCast();
 					} else {
-					  this.noCast = true;
+						this.noCast = true;
 					}
 				}.bind(this);
 			}
@@ -427,18 +447,19 @@ if (!window.SweCast) {
 			},
 			'svtplay.se': 'svt.se',
 			'kanal5play.se': function() {
-				var prefix = 'video/';
-				var start = window.location.hash.lastIndexOf(prefix);
-				if (start == -1) {
-					return;
-				}
-				var videoId = window.location.hash.substring(start+prefix.length);
-				var end = videoId.indexOf('|');
-				if (end != -1) {
-					videoId = videoId.substring(0,end);
-				}
 				util.eachXpath('//div[@class=\'sbs-player-home\']', function(el){
 					util.castBtn(el, function(){
+						var prefix = 'video/';
+						var start = window.location.hash.lastIndexOf(prefix);
+						if (start == -1) {
+							return;
+						}
+						var videoId = window.location.hash.substring(start+prefix.length);
+						var end = videoId.indexOf('|');
+						if (end != -1) {
+							videoId = videoId.substring(0,end);
+						}
+
 						util.ajax('/api/getVideo?format=IPAD&videoId='+videoId, function (data) {
 							data.streams.forEach(function(ref){
 								if (ref.format === 'IPAD') {
@@ -539,6 +560,9 @@ if (!window.SweCast) {
 					var url = vkvars['url720'] || vkvars['url480'] || vkvars['url360'] || vkvars['url240'];
 					SweCast.play(url, "Swefilmer");
 				}
+			},
+			'swefilmer.info': function() {
+				util.castIframe('https://vk.com');
 			}
 		}
 	};
