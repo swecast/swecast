@@ -28,24 +28,37 @@ if (!window.SweCast) {
 
 			elements.forEach(fn);
 		},
-		castIframe: function(urlPrefix) {
+		open: function(url) {
+			alert('Run the Swecast bookmarklet again.');
+			window.location.href = url;
+		},
+		castIframe: function(urlPrefix, cb) {
+			cb = cb || util.open;
+
 			util.eachXpath('//iframe[starts-with(@src, \''+urlPrefix+'\')]', function(el){
-				util.castBtn(el.parent(), function(){
-					alert('Run the Swecast bookmarklet again.');
-					window.location.href = el.attr('src');
+				util.castBtn(el, function(){
+					cb(el.attr('src'));
 				});
 			});
 		},
-		castBtn: function(el, fn) {
-			//el.css({
-			//	'borderTop': '30px solid black'
-			//});
-
-			var bar = $('<div>')
-			.css({
-				width: '100%',
-				backgroundColor: '#000'
+		openIframe: function() {
+			var url = null;
+			util.eachXpath('//iframe', function(el){
+				url = el.attr('src');
 			});
+
+			if (url) {
+				util.open(url);
+			}
+		},
+		castBtn: function(el, fn) {
+			SweCast.videoFound = true;
+
+			if (el.css('position') === 'absolute') {
+				el.css({
+					marginTop: '30px'
+				});
+			}
 
 			$('<img src="https://raw.githubusercontent.com/googlecast/CastHelloVideo-chrome/master/images/cast_icon_idle.png"/>')
 			.css({
@@ -55,15 +68,27 @@ if (!window.SweCast) {
 				top: 0,
 				left: 0,
 				zIndex: 99999,
-				cursor:'pointer'
+				cursor:'pointer',
+				visibility: 'visible'
 			})
 			.click(function(e){
 				e.stopPropagation();
 				e.preventDefault();
 				fn.call();
-			}).appendTo(bar);
-
-			bar.insertBefore(el);
+			})
+			.wrap('<div>').parent()
+			.css({
+				position: 'relative',
+				zIndex: 99998,
+				backgroundColor: '#000',
+				width: '100%',
+				visibility: 'visible'			
+			})
+			.wrap('<div>').parent()
+			.css({
+				width: el.width() || '100%',
+			})
+			.insertBefore(el);
 		},
 		queryDecode: function(query) {
 			var a = query.split('&');
@@ -215,6 +240,31 @@ if (!window.SweCast) {
 		},
 	
 		loadVideo: function() {
+
+			// if (this.requestAuthUrl) {
+			// 	this.setStatus('Authenticating');
+			// 	var mediaInfo = new chrome.cast.media.MediaInfo(this.requestAuthUrl, "image/jpg");
+	  //     		var request = new chrome.cast.media.LoadRequest(mediaInfo);
+			// 	this.session.loadMedia(request);
+
+			// 	setTimeout(function(){
+			// 		this.setStatus('Loading video');
+			// 		var mediaInfo = new chrome.cast.media.MediaInfo(this.requestUrl, "video/mp4");
+			// 		mediaInfo.metadata = new chrome.cast.media.MovieMediaMetadata();
+			// 		mediaInfo.metadata.title = this.requestTitle;
+			// 		mediaInfo.metadata.images = [new chrome.cast.Image(this.requestAuthUrl)];
+
+		 //      		var request = new chrome.cast.media.LoadRequest(mediaInfo);
+		 //      		request.autoplay = false;
+			// 		this.session.loadMedia(request, this.onMediaDiscovered.bind(this), this.showError.bind(this));
+			// 		this.logVideo(this.requestUrl);
+			// 		this.requestUrl = null;
+			// 		this.requestTitle = null;
+			// 		this.requestAuthUrl = null;
+			// 	}.bind(this), 5000);
+			// 	return;
+
+			// }
 			this.setStatus('Loading video');
 
 			var mediaInfo = new chrome.cast.media.MediaInfo(this.requestUrl, "video/mp4");
@@ -245,6 +295,7 @@ if (!window.SweCast) {
 					backgroundColor: '#000',
 					fontSize: '12px',
 					fontWeight: 'bold',
+					fontFamily: 'sans-serif',
 					boxSizing: 'content-box',
 					color: '#fff',
 					zIndex: 999999
@@ -323,7 +374,14 @@ if (!window.SweCast) {
 		},
 
 		initCast: function(){
-			var sessionRequest = new chrome.cast.SessionRequest(chrome.cast.media.DEFAULT_MEDIA_RECEIVER_APP_ID);//'74C7E5DC');//chrome.cast.media.DEFAULT_MEDIA_RECEIVER_APP_ID);
+			var sessionRequest = new chrome.cast.SessionRequest(
+				chrome.cast.media.DEFAULT_MEDIA_RECEIVER_APP_ID
+				//'74C7E5DC');//chrome.cast.media.DEFAULT_MEDIA_RECEIVER_APP_ID);
+					//'ECE66B88' // https://www.gstatic.com/eureka/castv2/0020/player/player.html?skin=skins/cast/skin.css&Debug=true
+					//'C8939A18'// - https://www.gstatic.com/eureka/castv2/0019/debug/debug.html
+					//'30F4C306'// - https://www.gstatic.com/eureka/samples/debug/debug.html
+					//'BE6E4473'//https://www.gstatic.com/eureka/player/0000/player.html?skin=https://www.gstatic.com/eureka/player/0000/skins/cast/skin.css&Debug=true
+				);
 			var apiConfig = new chrome.cast.ApiConfig(sessionRequest,
 				this.sessionListener.bind(this),
 				this.receiverListener.bind(this),
@@ -403,17 +461,18 @@ if (!window.SweCast) {
 
 		handlers: {
 			defaultHandler: function(){
-				var videoFound = false;
+				SweCast.videoFound = false;
 				util.eachXpath('//video', function(el){
-					videoFound = true;
-					var w = el.wrap('<div style="position: absolute;"></div>').parent();
-					util.castBtn(w, function(){
+					//var w = el.wrap('<div style="position: absolute;"></div>').parent();
+					util.castBtn(el, function(){
 						var src = el.attr('src') || el.children('source[type=\'video/mp4\']').attr('src');
 				    	SweCast.play(src, document.title);
 					});
 				});
 
-				if (!videoFound) {
+				util.castIframe('http://player.vimeo.com');
+
+				if (!SweCast.videoFound) {
 					SweCast.logUnsupported();					
 				}
 			},
@@ -489,25 +548,35 @@ if (!window.SweCast) {
 			'tv8play.se': 'tv3play.se',
 			'tv10play.se': 'tv3play.se',
 			'swefilmer.com': function() {
-				util.eachXpath('//div[@id=\'tabCtrl\']//iframe', function(el){
-					el.parent().css({
-						position: 'absolute'
-					});
-					util.castBtn(el.parent(), function(){
-						alert('Run the Swecast bookmarklet again.');
-						window.location.href = el.attr('src');
-					});
-				});
+				util.castIframe('http://swefilmer.info');
+				util.castIframe('http://vidor.me');
+
+
+				// util.eachXpath('//div[@id=\'tabCtrl\']//iframe', function(el){
+				// 	el.parent().css({
+				// 		position: 'absolute'
+				// 	});
+				// 	util.castBtn(el, function(){
+				// 		alert('Run the Swecast bookmarklet again.');
+				// 		window.location.href = el.attr('src');
+				// 	});
+				// });
 			},
 			'dreamfilm.se': function() {
 				util.castIframe('http://videoapi.my.mail.ru');
+				util.castIframe('http://dreamfilm.se/FLP', function(url){
+					var query = url.substring(url.indexOf('?')+1);
+					query = util.queryDecode(query);
+					url = decodeURIComponent(query.l);
+					util.open(url);
+				});
 			},
 			'videoapi.my.mail.ru': function(){
 				var url = flashVars['metadataUrl'];
 				util.ajax(url, function(data){
 					data = $.parseJSON(data);
 					var lastVideo = data.videos.pop();
-					SweCast.play(lastVideo.url, data.meta.title, url);
+					SweCast.play(lastVideo.url, data.meta.title, window.location.href);
 				});
 			},
 			'vidor.me': function(){
@@ -529,10 +598,7 @@ if (!window.SweCast) {
 					return;
 				}
 
-				util.eachXpath('//iframe', function(el){
-					window.location.href = el.attr('src');
-					alert('Run the Swecast bookmarklet one more time.');
-				});
+				util.openIframe();
 			},
 			'vk.com': function(){
 
@@ -562,7 +628,7 @@ if (!window.SweCast) {
 				}
 			},
 			'swefilmer.info': function() {
-				util.castIframe('https://vk.com');
+				util.openIframe();
 			}
 		}
 	};
