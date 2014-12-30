@@ -35,7 +35,7 @@ if (!window.SweCast) {
 		castIframe: function(urlPrefix, cb) {
 			cb = cb || util.open;
 
-			util.eachXpath('//iframe[starts-with(@src, \''+urlPrefix+'\')]', function(el){
+			util.eachXpath('//iframe[contains(@src, \''+urlPrefix+'\')]', function(el){
 				util.castBtn(el, function(){
 					cb(el.attr('src'));
 				});
@@ -82,7 +82,8 @@ if (!window.SweCast) {
 				zIndex: 99998,
 				backgroundColor: '#000',
 				width: '100%',
-				visibility: 'visible'			
+				visibility: 'visible',
+				textAlign: 'left'
 			})
 			.wrap('<div>').parent()
 			.css({
@@ -395,7 +396,8 @@ if (!window.SweCast) {
 			if (hostname.indexOf('www.') === 0) {
 				hostname = hostname.substring(4);
 			}
-			var handler = this.handlers[hostname] || this.handlers.defaultHandler;
+			var subhost = hostname.substring(hostname.indexOf('.')+1);
+			var handler = this.handlers[hostname] || this.handlers[subhost] || this.handlers.defaultHandler;
 
 			if (typeof handler === 'string') {
 				handler = this.handlers[handler];
@@ -463,14 +465,13 @@ if (!window.SweCast) {
 			defaultHandler: function(){
 				SweCast.videoFound = false;
 				util.eachXpath('//video', function(el){
-					//var w = el.wrap('<div style="position: absolute;"></div>').parent();
 					util.castBtn(el, function(){
 						var src = el.attr('src') || el.children('source[type=\'video/mp4\']').attr('src');
 				    	SweCast.play(src, document.title);
 					});
 				});
 
-				util.castIframe('http://player.vimeo.com');
+				util.castIframe('player.vimeo.com');
 
 				if (!SweCast.videoFound) {
 					SweCast.logUnsupported();					
@@ -548,8 +549,8 @@ if (!window.SweCast) {
 			'tv8play.se': 'tv3play.se',
 			'tv10play.se': 'tv3play.se',
 			'swefilmer.com': function() {
-				util.castIframe('http://swefilmer.info');
-				util.castIframe('http://vidor.me');
+				util.castIframe('swefilmer.info');
+				util.castIframe('vidor.me');
 
 
 				// util.eachXpath('//div[@id=\'tabCtrl\']//iframe', function(el){
@@ -563,8 +564,8 @@ if (!window.SweCast) {
 				// });
 			},
 			'dreamfilm.se': function() {
-				util.castIframe('http://videoapi.my.mail.ru');
-				util.castIframe('http://dreamfilm.se/FLP', function(url){
+				util.castIframe('videoapi.my.mail.ru');
+				util.castIframe('dreamfilm.se/FLP', function(url){
 					var query = url.substring(url.indexOf('?')+1);
 					query = util.queryDecode(query);
 					url = decodeURIComponent(query.l);
@@ -628,6 +629,14 @@ if (!window.SweCast) {
 				}
 			},
 			'swefilmer.info': function() {
+				if (window.jwplayer) {
+					var url = jwplayer("player").getPlaylist()[0].file;
+					if (url) {
+						SweCast.play(url, "Swefilmer");
+						return;
+					}
+				}
+
 				util.openIframe();
 			}
 		}
