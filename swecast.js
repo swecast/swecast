@@ -14,120 +14,62 @@ function loadScript(url, cb) {
 }
 
 if (!window.SweCast) {
-	var util = {
-		xpath: function(xpath) {
-			return $(document.evaluate(xpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue);
-		},
-		eachXpath: function(xpath, fn) {
-			var it = document.evaluate(xpath, document, null, XPathResult.UNORDERED_NODE_ITERATOR_TYPE, null);
-			var item;
-			var elements = [];
-			while (item = it.iterateNext()) {
-		    	elements.push($(item));
-			}
-
-			elements.forEach(fn);
-		},
-		open: function(url) {
-			alert('Run the Swecast bookmarklet again.');
-			window.location.href = url;
-		},
-		castIframe: function(urlPrefix, cb) {
-			cb = cb || util.open;
-
-			util.eachXpath('//iframe[contains(@src, \''+urlPrefix+'\')]', function(el){
-				util.castBtn(el, function(){
-					cb(el.attr('src'));
-				});
-			});
-		},
-		openIframe: function() {
-			var url = null;
-			util.eachXpath('//iframe', function(el){
-				url = el.attr('src');
-			});
-
-			if (url) {
-				util.open(url);
-			}
-		},
-		castBtn: function(el, fn) {
-			SweCast.videoFound = true;
-
-			if (el.css('position') === 'absolute') {
-				el.css({
-					marginTop: '30px'
-				});
-			}
-
-			$('<img src="https://raw.githubusercontent.com/googlecast/CastHelloVideo-chrome/master/images/cast_icon_idle.png"/>')
-			.css({
-				width: '30px',
-				position: 'relative',
-				backgroundColor: '#000',
-				top: 0,
-				left: 0,
-				zIndex: 99999,
-				cursor:'pointer',
-				visibility: 'visible'
-			})
-			.click(function(e){
-				e.stopPropagation();
-				e.preventDefault();
-				fn.call();
-			})
-			.wrap('<div>').parent()
-			.css({
-				position: 'relative',
-				zIndex: 99998,
-				backgroundColor: '#000',
-				width: '100%',
-				visibility: 'visible',
-				textAlign: 'left'
-			})
-			.wrap('<div>').parent()
-			.css({
-				width: el.width() || '100%',
-			})
-			.insertBefore(el);
-		},
-		queryDecode: function(query) {
-			var a = query.split('&');
-	        if (a == "") return {};
-	        var b = {};
-	        for (var i = 0; i < a.length; ++i){
-	        	var s = a[i].indexOf('=');
-	        	var key = a[i].substring(0,s);
-	        	var val = a[i].substring(s+1);
-	            b[key] = decodeURIComponent(val.replace(/\+/g, " "));
-	        }
-	        return b;
-		},
-		queryEncode: function(params) {
-			var query = "";
-			for (var key in params) {
-				if (query.length != 0) {
-					query += "&";
-				}
-				query += key+"="+encodeURIComponent(params[key]);
-			}
-			return query;
-		},
-		ajax: function(url, fn) {
-			$.ajax(url,{
-				success: fn,
-				error: function(req, status, error) {
-					SweCast.showError({
-						code: status,
-						description: error
-					});
-				}
-			});
-		}
-	};
 	SweCast = {
 
 		session: null,
+
+		appId: null,
+	
+		init: function() {
+			var handler = this.lookupHandler();
+
+			handler.call();
+
+			if (window.chrome && window.chrome.cast && window.chrome.cast.isAvailable) {
+				if (window.chrome.cast.isAvailable) {
+					this.initCast();
+					chrome.cast.requestSession(this.sessionListener.bind(this), this.showError.bind(this));
+				} else {
+					this.noCast = true;
+				}
+			} else {
+				window['__onGCastApiAvailable'] = function(loaded, errorInfo) {
+					if (loaded) {
+						this.initCast();
+					} else {
+						this.noCast = true;
+					}
+				}.bind(this);
+			}
+
+			this.logVisit();
+		},
+
+		initCast: function(){
+			var sessionRequest = new chrome.cast.SessionRequest(
+				SweCast.appId || chrome.cast.media.DEFAULT_MEDIA_RECEIVER_APP_ID
+				);
+			var apiConfig = new chrome.cast.ApiConfig(sessionRequest,
+				this.sessionListener.bind(this),
+				this.receiverListener.bind(this),
+				chrome.cast.AutoJoinPolicy.ORIGIN_SCOPED,
+				chrome.cast.DefaultActionPolicy.CREATE_SESSION);
+			chrome.cast.initialize(apiConfig, this.createUI.bind(this), this.showError.bind(this));
+		},
+
+		lookupHandler: function(){
+			var hostname = window.location.host;
+			if (hostname.indexOf('www.') === 0) {
+				hostname = hostname.substring(4);
+			}
+			var subhost = hostname.substring(hostname.indexOf('.')+1);
+			var handler = this.handlers[hostname] || this.handlers[subhost] || this.handlers.defaultHandler;
+
+			if (typeof handler === 'string') {
+				handler = this.handlers[handler];
+			}
+			return handler;
+		},
 
 		showError: function(e) {
 		  if (e.code == 'cancel') {
@@ -149,43 +91,59 @@ if (!window.SweCast) {
 		receiverListener: function(e) {
 			this.setStatus('reciever listener');
 			if( e === chrome.cast.ReceiverAvailability.AVAILABLE) {
-				this.setStatus('Select your chome cast');
-				chrome.cast.requestSession(this.sessionListener.bind(this), this.showError.bind(this));
+				this.setStatus('Select video or click play to connect');
 			} else {
 				this.setStatus('Unavailable, turn on your chrome cast');
 			}
 		},
 
+		requestSession: function() {
+			this.setStatus('Select chromecast device...');
+			chrome.cast.requestSession(this.sessionListener.bind(this), this.showError.bind(this));
+		},
+
 		onMediaDiscovered: function(media) {
-			if (!this.progressUpdater) {
+			if (!this.progressUpdater && media.getEstimatedTime) {
 				this.progressUpdater = setInterval(this.onMediaStatusUpdate.bind(this), 1000);
 			}
 			this.setStatus('Media discovered');
 
 			this.currentMedia = media;
 
-			if (this.currentMedia.media.metadata) {
-				this.statusWindow.statusText.text(this.currentMedia.media.metadata.title);
+			if (this.currentMedia.media) {
+				if (this.currentMedia.media.metadata) {
+					this.statusWindow.statusText.text(this.currentMedia.media.metadata.title);
+				}
+
+				var dur = this.currentMedia.media.duration;
+				this.statusWindow.progressBar.attr('max', dur);
+				this.statusWindow.progressTotal.text(this.time(dur));
+
+				this.onMediaStatusUpdate();
+
+				this.currentMedia.addUpdateListener(this.onMediaStatusUpdate.bind(this));
 			}
-
-			var dur = this.currentMedia.media.duration;
-			this.statusWindow.progressBar.attr('max', dur);
-			this.statusWindow.progressTotal.text(this.time(dur));
-
-			this.onMediaStatusUpdate();
-
-			this.currentMedia.addUpdateListener(this.onMediaStatusUpdate.bind(this));
 		},
 
 		onMediaStatusUpdate: function() {
-			if (this.currentMedia.playerState == 'PLAYING') {
-				this.statusWindow.playPauseBtn.html('&#9646;&#9646;');
-			} else if (this.currentMedia.playerState == 'PAUSED') {
+			if (this.currentMedia && this.session) {
+				if (this.currentMedia.playerState == 'PLAYING') {
+					this.statusWindow.playPauseBtn.html('&#9646;&#9646;');
+				} else {
+					this.statusWindow.playPauseBtn.html('&#9654;');
+				}
+				var t = this.currentMedia.getEstimatedTime();
+				this.statusWindow.progressText.text(this.time(t));
+				this.statusWindow.progressBar.attr('value', t);
+			} else {
 				this.statusWindow.playPauseBtn.html('&#9654;');
+
+				this.statusWindow.progressBar.attr('max', 0);
+				this.statusWindow.progressTotal.text(this.time(0));
+
+				this.statusWindow.progressText.text(this.time(0));
+				this.statusWindow.progressBar.attr('value', 0);
 			}
-			var t = this.currentMedia.getEstimatedTime();
-			this.statusWindow.progressText.text(this.time(t));
-			this.statusWindow.progressBar.attr('value', t);
 		},
 
 		time: function(t) {
@@ -204,25 +162,41 @@ if (!window.SweCast) {
 		},
 		
 		stop: function() {
-			this.currentMedia.stop(null, null, this.showError.bind(this));
+			if (this.currentMedia && (this.currentMedia.playerState === 'PLAYING' || this.currentMedia.playerState === 'PAUSED')) {
+				this.currentMedia.stop(null, null, this.showError.bind(this));
+			} else if (this.session) {
+				this.session.stop(null, this.showError.bind(this));
+				this.setStatus('Disconnected');
+				this.session = null;
+			}
+			this.onMediaStatusUpdate();
 		},
 		
 		playPause: function(e) {
-			if (!this.currentMedia) {
+			if (!this.currentMedia || !this.session) {
 				chrome.cast.requestSession(this.sessionListener.bind(this), this.showError.bind(this));
 				return;
 			}
 		  	if (this.currentMedia.playerState == 'PLAYING') {
 				this.currentMedia.pause(null, null, this.showError.bind(this));
-			} else {
+			} else if (this.currentMedia.playerState == 'PAUSED') {
 				this.currentMedia.play(null, null, this.showError.bind(this));
+			} else if (this.currentMedia.media){
+	      		var request = new chrome.cast.media.LoadRequest(this.currentMedia.media);
+				this.session.loadMedia(request, this.onMediaDiscovered.bind(this), this.showError.bind(this));
+				this.setStatus('Loading video...');
+			} else {
+				this.setStatus('Select a video');
 			}
 		},
 
-		play: function(url, title, authUrl) {
+		play: function(url, title, webPage) {
 		  	this.requestUrl = url;
 		  	this.requestTitle = title;
-		  	this.requestAuthUrl = authUrl;
+		  	this.requestWebPage = webPage;
+		  	if (this.requestWebPage) {
+		  		this.appId = '02893205';
+		  	}
 		  	if (this.noCast === true) {
 		  		var body = $(document.body);
 		  		body.empty();
@@ -237,53 +211,31 @@ if (!window.SweCast) {
 		  		vid.appendTo(body);
 		  	} else if (this.session) {
 				this.loadVideo();
+			} else {
+				this.requestSession();
 			}
 		},
 	
 		loadVideo: function() {
-
-			// if (this.requestAuthUrl) {
-			// 	this.setStatus('Authenticating');
-			// 	var mediaInfo = new chrome.cast.media.MediaInfo(this.requestAuthUrl, "image/jpg");
-	  //     		var request = new chrome.cast.media.LoadRequest(mediaInfo);
-			// 	this.session.loadMedia(request);
-
-			// 	setTimeout(function(){
-			// 		this.setStatus('Loading video');
-			// 		var mediaInfo = new chrome.cast.media.MediaInfo(this.requestUrl, "video/mp4");
-			// 		mediaInfo.metadata = new chrome.cast.media.MovieMediaMetadata();
-			// 		mediaInfo.metadata.title = this.requestTitle;
-			// 		mediaInfo.metadata.images = [new chrome.cast.Image(this.requestAuthUrl)];
-
-		 //      		var request = new chrome.cast.media.LoadRequest(mediaInfo);
-		 //      		request.autoplay = false;
-			// 		this.session.loadMedia(request, this.onMediaDiscovered.bind(this), this.showError.bind(this));
-			// 		this.logVideo(this.requestUrl);
-			// 		this.requestUrl = null;
-			// 		this.requestTitle = null;
-			// 		this.requestAuthUrl = null;
-			// 	}.bind(this), 5000);
-			// 	return;
-
-			// }
 			this.setStatus('Loading video');
 
-			var mediaInfo = new chrome.cast.media.MediaInfo(this.requestUrl, "video/mp4");
-			mediaInfo.metadata = new chrome.cast.media.MovieMediaMetadata();
-			mediaInfo.metadata.title = this.requestTitle;
-			if (this.requestAuthUrl) {
-				mediaInfo.metadata.images = [new chrome.cast.Image(this.requestAuthUrl)];
-			}
+			if (this.requestWebPage) {
+				this.session.sendMessage('urn:x-cast:com.google.cast.sample.helloworld', '<script language="javascript">window.location.href="'+this.requestUrl+'";</script>', this.onMediaDiscovered.bind(this), this.showError.bind(this));
+			} else {
+				var mediaInfo = new chrome.cast.media.MediaInfo(this.requestUrl, "video/mp4");
+				mediaInfo.metadata = new chrome.cast.media.MovieMediaMetadata();
+				mediaInfo.metadata.title = this.requestTitle;
 
-      		var request = new chrome.cast.media.LoadRequest(mediaInfo);
-			this.session.loadMedia(request, this.onMediaDiscovered.bind(this), this.showError.bind(this));
+	      		var request = new chrome.cast.media.LoadRequest(mediaInfo);
+				this.session.loadMedia(request, this.onMediaDiscovered.bind(this), this.showError.bind(this));
+			}
 			this.logVideo(this.requestUrl);
 			this.requestUrl = null;
 			this.requestTitle = null;
-			this.requestAuthUrl = null;
+			this.requestWebPage = null;
 		},
 		
-		initialized: function() {
+		createUI: function() {
 			if (!this.statusWindow) {
 				this.statusWindow = document.createElement('div');
 				$(this.statusWindow).css({
@@ -374,57 +326,6 @@ if (!window.SweCast) {
 			this.statusWindow.statusText.text(msg);
 		},
 
-		initCast: function(){
-			var sessionRequest = new chrome.cast.SessionRequest(
-				chrome.cast.media.DEFAULT_MEDIA_RECEIVER_APP_ID
-				//'74C7E5DC');//chrome.cast.media.DEFAULT_MEDIA_RECEIVER_APP_ID);
-					//'ECE66B88' // https://www.gstatic.com/eureka/castv2/0020/player/player.html?skin=skins/cast/skin.css&Debug=true
-					//'C8939A18'// - https://www.gstatic.com/eureka/castv2/0019/debug/debug.html
-					//'30F4C306'// - https://www.gstatic.com/eureka/samples/debug/debug.html
-					//'BE6E4473'//https://www.gstatic.com/eureka/player/0000/player.html?skin=https://www.gstatic.com/eureka/player/0000/skins/cast/skin.css&Debug=true
-				);
-			var apiConfig = new chrome.cast.ApiConfig(sessionRequest,
-				this.sessionListener.bind(this),
-				this.receiverListener.bind(this),
-				chrome.cast.AutoJoinPolicy.ORIGIN_SCOPED,
-				chrome.cast.DefaultActionPolicy.CREATE_SESSION);
-			chrome.cast.initialize(apiConfig, this.initialized.bind(this), this.showError.bind(this));
-		},
-	
-		init: function() {
-			var hostname = window.location.host;
-			if (hostname.indexOf('www.') === 0) {
-				hostname = hostname.substring(4);
-			}
-			var subhost = hostname.substring(hostname.indexOf('.')+1);
-			var handler = this.handlers[hostname] || this.handlers[subhost] || this.handlers.defaultHandler;
-
-			if (typeof handler === 'string') {
-				handler = this.handlers[handler];
-			}
-
-			handler.call();
-
-			if (window.chrome && window.chrome.cast && window.chrome.cast.isAvailable) {
-				if (window.chrome.cast.isAvailable) {
-					this.initCast();
-					chrome.cast.requestSession(this.sessionListener.bind(this), this.showError.bind(this));
-				} else {
-					this.noCast = true;
-				}
-			} else {
-				window['__onGCastApiAvailable'] = function(loaded, errorInfo) {
-					if (loaded) {
-						this.initCast();
-					} else {
-						this.noCast = true;
-					}
-				}.bind(this);
-			}
-
-			this.logVisit();
-		},
-
 		logVideo: function(vidUrl) {
 			this.log({
 				webpageName: window.location.host+" - "+document.title+" /VID",
@@ -458,29 +359,139 @@ if (!window.SweCast) {
 			});
 
 			var img = new Image();
-			img.src = 'https://www.w3counter.com/tracker.php?'+util.queryEncode(params);
+			img.src = 'https://www.w3counter.com/tracker.php?'+SweCast.queryEncode(params);
+		},
+
+		xpath: function(xpath) {
+			return $(document.evaluate(xpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue);
+		},
+		eachXpath: function(xpath, fn) {
+			var it = document.evaluate(xpath, document, null, XPathResult.UNORDERED_NODE_ITERATOR_TYPE, null);
+			var item;
+			var elements = [];
+			while (item = it.iterateNext()) {
+		    	elements.push($(item));
+			}
+
+			elements.forEach(fn);
+		},
+		open: function(url) {
+			alert('Run the Swecast bookmarklet again.');
+			window.location.href = url;
+		},
+		castIframe: function(urlPrefix, cb) {
+			cb = cb || SweCast.open;
+
+			SweCast.eachXpath('//iframe[contains(@src, \''+urlPrefix+'\')]', function(el){
+				SweCast.castBtn(el, function(){
+					cb(el.attr('src'));
+				});
+			});
+		},
+		openIframe: function() {
+			var url = null;
+			SweCast.eachXpath('//iframe', function(el){
+				url = el.attr('src');
+			});
+
+			if (url) {
+				SweCast.open(url);
+			}
+		},
+		castBtn: function(el, fn) {
+			SweCast.videoFound = true;
+
+			if (el.css('position') === 'absolute') {
+				el.css({
+					marginTop: '30px'
+				});
+			}
+
+			$('<img src="https://raw.githubusercontent.com/googlecast/CastHelloVideo-chrome/master/images/cast_icon_idle.png"/>')
+			.css({
+				width: '30px',
+				position: 'relative',
+				backgroundColor: '#000',
+				top: 0,
+				left: 0,
+				zIndex: 99999,
+				cursor:'pointer',
+				visibility: 'visible'
+			})
+			.click(function(e){
+				e.stopPropagation();
+				e.preventDefault();
+				fn.call();
+			})
+			.wrap('<div>').parent()
+			.css({
+				position: 'relative',
+				zIndex: 99998,
+				backgroundColor: '#000',
+				width: '100%',
+				visibility: 'visible',
+				textAlign: 'left'
+			})
+			.wrap('<div>').parent()
+			.css({
+				width: el.width() || '100%',
+			})
+			.insertBefore(el);
+		},
+		queryDecode: function(query) {
+			var a = query.split('&');
+	        if (a == "") return {};
+	        var b = {};
+	        for (var i = 0; i < a.length; ++i){
+	        	var s = a[i].indexOf('=');
+	        	var key = a[i].substring(0,s);
+	        	var val = a[i].substring(s+1);
+	            b[key] = decodeURIComponent(val.replace(/\+/g, " "));
+	        }
+	        return b;
+		},
+		queryEncode: function(params) {
+			var query = "";
+			for (var key in params) {
+				if (query.length != 0) {
+					query += "&";
+				}
+				query += key+"="+encodeURIComponent(params[key]);
+			}
+			return query;
+		},
+		ajax: function(url, fn) {
+			$.ajax(url,{
+				success: fn,
+				error: function(req, status, error) {
+					SweCast.showError({
+						code: status,
+						description: error
+					});
+				}
+			});
 		},
 
 		handlers: {
 			defaultHandler: function(){
 				SweCast.videoFound = false;
-				util.eachXpath('//video', function(el){
-					util.castBtn(el, function(){
+				SweCast.eachXpath('//video', function(el){
+					SweCast.castBtn(el, function(){
 						var src = el.attr('src') || el.children('source[type=\'video/mp4\']').attr('src');
 				    	SweCast.play(src, document.title);
 					});
 				});
 
-				util.castIframe('player.vimeo.com');
+				SweCast.castIframe('player.vimeo.com');
 
 				if (!SweCast.videoFound) {
 					SweCast.logUnsupported();					
 				}
 			},
 			'tv4.se': function(){
-				util.eachXpath('//figure[@data-video-id]', function(el){
-					util.castBtn(el, function(){
-						util.ajax('https://prima.tv4play.se/api/mobil/asset/'+el.attr('data-video-id')+'/play?protocol=hls&videoFormat=MP4+WEBVTTS', function(data){
+				SweCast.eachXpath('//figure[@data-video-id]', function(el){
+					SweCast.castBtn(el, function(){
+						SweCast.ajax('https://prima.tv4play.se/api/mobil/asset/'+el.attr('data-video-id')+'/play?protocol=hls&videoFormat=MP4+WEBVTTS', function(data){
 							var title = $(data).find('title').first().text();
 						  	$(data).find('url').each(function(i, url){
 							    if (i == 0) {
@@ -493,9 +504,9 @@ if (!window.SweCast) {
 				});
 			},
 			'svt.se': function(){
-				util.eachXpath('//a[@data-json-href]', function(el){
-					util.castBtn(el, function(){
-						util.ajax(el.attr('data-json-href')+'?output=json',function(data){
+				SweCast.eachXpath('//a[@data-json-href]', function(el){
+					SweCast.castBtn(el, function(){
+						SweCast.ajax(el.attr('data-json-href')+'?output=json',function(data){
 							$.each(data.video.videoReferences, function(i, ref){
 								if (ref.playerType === 'ios') {
 									SweCast.play(ref.url, data.context.title);
@@ -507,8 +518,8 @@ if (!window.SweCast) {
 			},
 			'svtplay.se': 'svt.se',
 			'kanal5play.se': function() {
-				util.eachXpath('//div[@class=\'sbs-player-home\']', function(el){
-					util.castBtn(el, function(){
+				SweCast.eachXpath('//div[@class=\'sbs-player-home\']', function(el){
+					SweCast.castBtn(el, function(){
 						var prefix = 'video/';
 						var start = window.location.hash.lastIndexOf(prefix);
 						if (start == -1) {
@@ -520,7 +531,7 @@ if (!window.SweCast) {
 							videoId = videoId.substring(0,end);
 						}
 
-						util.ajax('/api/getVideo?format=IPAD&videoId='+videoId, function (data) {
+						SweCast.ajax('/api/getVideo?format=IPAD&videoId='+videoId, function (data) {
 							data.streams.forEach(function(ref){
 								if (ref.format === 'IPAD') {
 									SweCast.play(ref.source, data.title);
@@ -536,9 +547,9 @@ if (!window.SweCast) {
 				var videoId = window.location.pathname;
 				videoId = videoId.substring(videoId.lastIndexOf('/')+1);
 				if (videoId && parseInt(videoId)) {
-					util.eachXpath('//div[@class=\'video-player-content\']', function(el){
-						util.castBtn(el, function(){
-							util.ajax('http://playapi.mtgx.tv/v1/videos/stream/'+videoId, function (data) {
+					SweCast.eachXpath('//div[@class=\'video-player-content\']', function(el){
+						SweCast.castBtn(el, function(){
+							SweCast.ajax('http://playapi.mtgx.tv/v1/videos/stream/'+videoId, function (data) {
 								SweCast.play(data.streams.hls, document.title);
 							});
 						});
@@ -549,36 +560,20 @@ if (!window.SweCast) {
 			'tv8play.se': 'tv3play.se',
 			'tv10play.se': 'tv3play.se',
 			'swefilmer.com': function() {
-				util.castIframe('swefilmer.info');
-				util.castIframe('vidor.me');
-
-
-				// util.eachXpath('//div[@id=\'tabCtrl\']//iframe', function(el){
-				// 	el.parent().css({
-				// 		position: 'absolute'
-				// 	});
-				// 	util.castBtn(el, function(){
-				// 		alert('Run the Swecast bookmarklet again.');
-				// 		window.location.href = el.attr('src');
-				// 	});
-				// });
+				SweCast.castIframe('swefilmer.info');
+				SweCast.castIframe('vidor.me');
 			},
 			'dreamfilm.se': function() {
-				util.castIframe('videoapi.my.mail.ru');
-				util.castIframe('dreamfilm.se/FLP', function(url){
+				SweCast.castIframe('videoapi.my.mail.ru');
+				SweCast.castIframe('dreamfilm.se/FLP', function(url){
 					var query = url.substring(url.indexOf('?')+1);
-					query = util.queryDecode(query);
+					query = SweCast.queryDecode(query);
 					url = decodeURIComponent(query.l);
-					util.open(url);
+					SweCast.open(url);
 				});
 			},
 			'videoapi.my.mail.ru': function(){
-				var url = flashVars['metadataUrl'];
-				util.ajax(url, function(data){
-					data = $.parseJSON(data);
-					var lastVideo = data.videos.pop();
-					SweCast.play(lastVideo.url, data.meta.title, window.location.href);
-				});
+				SweCast.play(window.location+'?autoplay=true', null, true);
 			},
 			'vidor.me': function(){
 				if (window.jwplayer) {
@@ -587,9 +582,9 @@ if (!window.SweCast) {
 					return;
 				}
 
-				var el = util.xpath('//param[@name=\'FlashVars\']');
+				var el = SweCast.xpath('//param[@name=\'FlashVars\']');
 				if (el && el.attr('value')) {
-					var vars = util.queryDecode(el.attr('value'));
+					var vars = SweCast.queryDecode(el.attr('value'));
 					var url = vars['proxy.link'];
 					var regex = /proxy.link=(.*?)&/g;
 					var result = regex.exec(vars);
@@ -599,7 +594,7 @@ if (!window.SweCast) {
 					return;
 				}
 
-				util.openIframe();
+				SweCast.openIframe();
 			},
 			'vk.com': function(){
 
@@ -607,7 +602,7 @@ if (!window.SweCast) {
 					marginTop: '40px'
 				});
 
-				var video = util.xpath('//source');
+				var video = SweCast.xpath('//source');
 
 				if (video && video.attr('src')) {
 					SweCast.play(video.attr('src'), "Swefilmer");
@@ -616,10 +611,10 @@ if (!window.SweCast) {
 
 				var vkvars = window.vars;
 				if (!vkvars) {
-					var el = util.xpath('//param[@name=\'flashvars\']');
+					var el = SweCast.xpath('//param[@name=\'flashvars\']');
 					if (el && el.attr('value')) {
 						vkvars = el.attr('value');
-						vkvars = util.queryDecode(vkvars);
+						vkvars = SweCast.queryDecode(vkvars);
 					}
 				}
 
@@ -637,7 +632,7 @@ if (!window.SweCast) {
 					}
 				}
 
-				util.openIframe();
+				SweCast.openIframe();
 			}
 		}
 	};
