@@ -28,7 +28,6 @@ if (!window.SweCast) {
 			if (window.chrome && window.chrome.cast && window.chrome.cast.isAvailable) {
 				if (window.chrome.cast.isAvailable) {
 					this.initCast();
-					chrome.cast.requestSession(this.sessionListener.bind(this), this.showError.bind(this));
 				} else {
 					this.noCast = true;
 				}
@@ -279,7 +278,6 @@ if (!window.SweCast) {
 					display: 'inline-block'
 				});
 				this.statusWindow.progressTotal.appendTo(this.statusWindow.progress);
-				//$('<br>').appendTo(this.statusWindow);
 				this.statusWindow.playPauseBtn = $('<button/>');
 
 				this.statusWindow.playPauseBtn
@@ -407,9 +405,10 @@ if (!window.SweCast) {
 				});
 			}
 
-			$('<img src="https://raw.githubusercontent.com/googlecast/CastHelloVideo-chrome/master/images/cast_icon_idle.png"/>')
+			$('<img src="https://cdn.rawgit.com/googlecast/CastHelloVideo-chrome/master/images/cast_icon_idle.png"/>')
 			.css({
-				width: '30px',
+				width: '32px',
+				height: '32px',
 				position: 'relative',
 				backgroundColor: '#000',
 				top: 0,
