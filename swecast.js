@@ -543,17 +543,14 @@ if (!window.SweCast) {
 			'kanal9play.se': 'kanal5play.se',
 			'kanal11play.se': 'kanal5play.se',
 			'tv3play.se': function(){
-				var videoId = window.location.pathname;
-				videoId = videoId.substring(videoId.lastIndexOf('/')+1);
-				if (videoId && parseInt(videoId)) {
-					SweCast.eachXpath('//div[@class=\'video-player-content\']', function(el){
-						SweCast.castBtn(el, function(){
-							SweCast.ajax('http://playapi.mtgx.tv/v1/videos/stream/'+videoId, function (data) {
-								SweCast.play(data.streams.hls, document.title);
-							});
+				SweCast.eachXpath('//div[@class=\'video-player-content\']', function(el){
+					SweCast.castBtn(el, function(){
+						var videoId = el.parent().attr("data-id");
+						SweCast.ajax('http://playapi.mtgx.tv/v1/videos/stream/'+videoId, function (data) {
+							SweCast.play(data.streams.hls, document.title);
 						});
 					});
-				}
+				});
 			},
 			'tv6play.se': 'tv3play.se',
 			'tv8play.se': 'tv3play.se',
