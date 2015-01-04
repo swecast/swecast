@@ -37,19 +37,34 @@ if (!window.SweCast) {
 				if (window.chrome.cast.isAvailable) {
 					this.initCast();
 				} else {
-					this.noCast = true;
+					this.noExtension();
 				}
 			} else {
 				window['__onGCastApiAvailable'] = function(loaded, errorInfo) {
 					if (loaded) {
 						this.initCast();
 					} else {
-						this.noCast = true;
+						this.noExtension();
 					}
 				}.bind(this);
 			}
 
 			this.logVisit();
+		},
+
+		noExtension: function() {
+			var ua = window.navigator.userAgent;
+			if (ua.indexOf('Chrome') != -1 && ua.indexOf('Mobile') != -1) {
+				this.noCast = true;
+			} else {
+				if (ua.indexOf('CriOS') != -1) {
+					alert("Please update the chrome browser");
+					window.location.href='https://itunes.apple.com/us/app/chrome-web-browser-by-google/id535886823?mt=8';
+				} else {
+					alert("You need to install the Google Cast Extension first");
+					window.location.href='https://chrome.google.com/webstore/detail/google-cast/boadgeojelhgndaghljhdicfkmllpafd?hl=en';
+				}
+			}
 		},
 
 		initCast: function(){
@@ -214,9 +229,6 @@ if (!window.SweCast) {
 		  		var body = $(document.body);
 		  		body.empty();
 		  		var vid = $('<video src="'+url+'" controls></video>');
-		  		if (authUrl) {
-		  			vid.attr('poster',authUrl);
-		  		}
 		  		vid.css({
 			  			width: '90%',
 			  			height: '90%'
