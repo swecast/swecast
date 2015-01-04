@@ -21,7 +21,8 @@ if (!window.SweCast) {
 		appId: null,
 	
 		init: function() {
-			if (window.navigator.userAgent.indexOf('Chrome') === -1) {
+			var ua = window.navigator.userAgent;
+			if (ua.indexOf('Chrome') === -1 && ua.indexOf('CriOS') === -1) {
 				alert("SweCast can only be run from the Chrome browser. No other browsers are supported because they do not have the chromecast extensions needed.");
 				return;
 			}
