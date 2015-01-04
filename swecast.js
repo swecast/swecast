@@ -97,15 +97,21 @@ if (!window.SweCast) {
 		receiverListener: function(e) {
 			this.setStatus('reciever listener');
 			if( e === chrome.cast.ReceiverAvailability.AVAILABLE) {
-				this.setStatus('Select video or click play to connect');
+				if (this.requestUrl) {
+					this.requestSession();
+				} else {
+					this.setStatus('Select video or click play to connect');
+				}
 			} else {
 				this.setStatus('Unavailable, turn on your chrome cast');
 			}
 		},
 
 		requestSession: function() {
-			this.setStatus('Select chromecast device...');
-			chrome.cast.requestSession(this.sessionListener.bind(this), this.showError.bind(this));
+			if (chrome.cast) {
+				this.setStatus('Select chromecast device...');
+				chrome.cast.requestSession(this.sessionListener.bind(this), this.showError.bind(this));
+			}
 		},
 
 		onMediaDiscovered: function(media) {
