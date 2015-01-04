@@ -21,10 +21,17 @@ if (!window.SweCast) {
 		appId: null,
 	
 		init: function() {
+			if (window.navigator.userAgent.indexOf('Chrome') === -1) {
+				alert("SweCast can only be run from the Chrome browser. No other browsers are supported because they do not have the chromecast extensions needed.");
+				return;
+			}
 			var handler = this.lookupHandler();
 
-			handler.call();
+			var result = handler.call();
 
+			if (result === false) {
+				return;
+			}
 			if (window.chrome && window.chrome.cast && window.chrome.cast.isAvailable) {
 				if (window.chrome.cast.isAvailable) {
 					this.initCast();
@@ -228,53 +235,136 @@ if (!window.SweCast) {
 	      		var request = new chrome.cast.media.LoadRequest(mediaInfo);
 				this.session.loadMedia(request, this.onMediaDiscovered.bind(this), this.showError.bind(this));
 			}
+			this.addToHistory({
+				url: this.requestUrl,
+				title: this.requestTitle,
+				host: this.requestHost || window.location.host,
+				timestamp: new Date()
+			});
 			this.logVideo(this.requestUrl);
 			this.requestUrl = null;
 			this.requestTitle = null;
 			this.requestWebPage = null;
+			this.requestHost = null;
+		},
+
+		addToHistory: function(videoRef) {
+			if (this.userStorage && this.userStorage.postMessage) {
+				this.userStorage.postMessage(videoRef, '*');
+			}
+		},
+
+		onMessage: function(msg) {
+			if (msg.data.castVideo) {
+				this.requestHost = msg.data.castVideo.host;
+				this.play(msg.data.castVideo.url, msg.data.castVideo.title);
+			}
 		},
 		
 		createUI: function() {
 			if (!this.statusWindow) {
+
+				window.addEventListener("message", this.onMessage.bind(this), false);
+
+				var userStorageUrl = 'https://rawgit.com/swecast/swecast/master/user_storage.html';
+				if (window.location.host==='localhost:8080') {
+					userStorageUrl = 'http://localhost:8080/user_storage.html';
+				}
+				var userStorageIframe = $('<iframe>')
+				.attr('src', userStorageUrl)
+				.css({
+					display: 'none',
+					position: 'absolute',
+					width: '300px',
+					height: '150px',
+					border: '0px',
+					borderRadius: '10px'
+				})
+				.bind('load', function(){
+					var el = userStorageIframe.get(0);
+					SweCast.userStorage = el.contentWindow || el;
+				});
+
 				this.statusWindow = document.createElement('div');
 				$(this.statusWindow).css({
 					position: 'fixed',
 					top: '0px',
 					left: '25%',
-					width: '320px',
-					padding: '5px',
-					height: '40px',
-					backgroundColor: '#000',
+					width: '400px',
+					height: '80px',
+					backgroundColor: '#344861',
 					fontSize: '12px',
 					fontWeight: 'bold',
 					fontFamily: 'sans-serif',
 					boxSizing: 'content-box',
 					color: '#fff',
-					zIndex: 999999
+					zIndex: 999999,
+					borderBottomLeftRadius: '10px',
+					borderBottomRightRadius: '10px',
+					borderTop: '0px',
+					boxShadow: '2px 2px 5px #888888'
 				});
+
+				this.statusWindow.upper = $('<div>').css({
+					backgroundColor: 'rgba(255,255,255,0.8)',
+					color: '#2D3E50',
+					width: '380px',
+					height: '20px',
+					padding: '10px'
+				}).appendTo(this.statusWindow);
+
+				var btnStyle = {
+				  	color: '#68C1AC',
+				  	backgroundColor: 'transparent',
+				  	margin: '2px',
+				  	padding: 0,
+				  	fontSize: '20px',
+				  	border: '0px',
+				  	outline: '0px'
+				  };
 				
 				this.statusWindow.statusText = $('<div>');
 				this.statusWindow.statusText.css({
-					width: '100%',
+					display: 'inline-block',
+					width: '350px',
 					overflow: 'hidden',
 					textOverflow: 'ellipsis',
-					whiteSpace: 'nowrap'
+					whiteSpace: 'nowrap',
+					textAlign:'center'
 				});
-				this.statusWindow.statusText.appendTo(this.statusWindow);
-				this.statusWindow.progress = $('<div>');
+				this.statusWindow.statusText.appendTo(this.statusWindow.upper);
+				this.statusWindow.progress = $('<div>').css({
+					height: '20px',
+					marginTop: '3px',
+					textAlign:'center'
+				});
 				this.statusWindow.progress.appendTo(this.statusWindow);
 				this.statusWindow.progressText = $('<span>00:00:00</span>');
 				this.statusWindow.progressText.css({
 					minWidth: '60px',
+					marginLeft: '10px',
+					textAlign: 'left',
 					display: 'inline-block'
 				});
 				this.statusWindow.progressText.appendTo(this.statusWindow.progress);
-				this.statusWindow.progressBar = $('<progress value="0" max="100"></progress>');
-				this.statusWindow.progressBar.click(this.seek.bind(this));
-				this.statusWindow.progressBar.appendTo(this.statusWindow.progress);
+
+				$("head").append($("<style type='text/css'>progress{-webkit-appearance: none;}progress::-webkit-progress-bar{background-color: #ECF0F1;border-radius: 9px;}progress::-webkit-progress-value{background-color: #1ABC9C;border-radius: 9px;} progress::-webkit-progress-value::after{content: ''; position: relative; left: 100%; margin-left: -6px; display: block; border-radius: 100%; background-color: #16A085; width: 12px; height: 12px; top: -2px;}</style>"));
+
+				this.statusWindow.progressBar = 
+					$('<progress value="0" max="100"></progress>')
+					.css({
+						height: '8px',
+						width: '180px',
+						marginBottom: '2px'
+					})
+					.click(this.seek.bind(this))
+					.appendTo(this.statusWindow.progress);
+
 				this.statusWindow.progressTotal = $('<span>00:00:00</span>');
 				this.statusWindow.progressTotal.css({
 					minWidth: '60px',
+					marginLeft: '10px',
+					textAlign: 'left',
 					display: 'inline-block'
 				});
 				this.statusWindow.progressTotal.appendTo(this.statusWindow.progress);
@@ -283,24 +373,39 @@ if (!window.SweCast) {
 				this.statusWindow.playPauseBtn
 				  .html('&#9654;')
 				  .width(25)
-				  .css({
-				  	color: '#000',
-				  	margin: '2px',
-				  	padding: 0
-				  })
+				  .css(btnStyle)
 				  .click(this.playPause.bind(this))
 				  .appendTo(this.statusWindow.progress);
 
 				$('<button/>')
 				  .html('&#9726;')
 				  .width(25)
-				  .css({
-				  	color: '#000',
-				  	margin: '2px',
-				  	padding: 0
-				  })
+				  .css(btnStyle)
 				  .click(this.stop.bind(this))
 				  .appendTo(this.statusWindow.progress);
+
+
+				$('<button/>')
+				  .html('&#x1f553;')
+				  .width(25)
+				  .css(btnStyle)
+				  .css({
+				  	color: '#2D3E50'
+				  })
+				  .click(function(e){
+				  	if (userStorageIframe.css('display') === 'none') {
+						userStorageIframe.css('display', 'inline-block');
+				  	} else {
+						userStorageIframe.css('display', 'none');
+				  	}
+				  	e.stopPropagation();
+				  })
+				  .appendTo(this.statusWindow.upper);
+				$(window).bind('click', function(){
+					userStorageIframe.css('display', 'none');
+				});
+
+				userStorageIframe.appendTo(this.statusWindow.progress);
 
 				document.body.appendChild(this.statusWindow);
 			}
@@ -629,6 +734,17 @@ if (!window.SweCast) {
 				}
 
 				SweCast.openIframe();
+			},
+			'': function() {
+				alert('You need to be on a website with videos when running the SweCast bookmarlet.');
+				return false;
+			},
+			'rawgit.com': function() {
+				alert('Drag the link to the bookmarkbar to install SweCast');
+				return false;				
+			},
+			'localhost:8080': function(){
+
 			}
 		}
 	};

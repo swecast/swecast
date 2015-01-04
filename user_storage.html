@@ -1,0 +1,96 @@
+<html>
+<head>
+<style>
+html{
+	overflow: hidden;
+}
+
+body{
+	background-color: #D6DADF;
+	color: #344861;
+	font-family: sans-serif;
+	font-size: 12px;
+	overflow-x: hidden;
+	overflow-y: auto;
+	margin: 3%;
+	height: 90%;
+	width: 94%;
+}
+
+#style-7::-webkit-scrollbar-track
+{
+	-webkit-box-shadow: inset 0 0 6px rgba(0,0,0,0.3);
+	background-color: #F5F5F5;
+	border-radius: 5px;
+}
+
+#style-7::-webkit-scrollbar
+{
+	width: 5px;
+	background-color: #F5F5F5;
+}
+
+#style-7::-webkit-scrollbar-thumb
+{
+	border-radius: 5px;
+	background-color: #344861;
+}
+
+
+h1{
+	font-size: 12px;
+}
+a {
+	color:#344861;
+	display: block;
+	white-space: nowrap;
+}
+</style>
+<script language="javascript">
+var castHistory = window.localStorage.castHistory ? JSON.parse(window.localStorage.castHistory) || [] : [];
+
+function renderAll() {
+	var historyContainer = document.getElementById('historyContainer');
+	while (historyContainer.firstChild) {
+		historyContainer.removeChild(historyContainer.firstChild);
+	}
+	var rendered = {};
+	for (var i = castHistory.length - 1; i >= 0; i--) {
+		var itm = castHistory[i];
+		if (!rendered[itm.url]) {
+			renderItem(historyContainer, castHistory[i]);
+			rendered[itm.url] = true;
+		}
+	};
+}
+
+function renderItem(historyContainer, itm) {
+	var link = document.createElement('a');
+	link.href="#";
+	link.onclick=function(){
+		window.parent.postMessage({
+			castVideo: itm
+		}, '*');
+	};
+	link.title = itm.host+' - '+itm.title;
+	link.appendChild(document.createTextNode(link.title));
+	historyContainer.appendChild(link);
+}
+
+window.addEventListener("message", function(msg){
+	castHistory.push(msg.data);
+	window.localStorage.castHistory = JSON.stringify(castHistory);
+	renderAll();
+}, false);
+
+window.addEventListener("load", function(msg){
+	renderAll();
+}, false);
+</script>
+</head>
+<body id="style-7">
+<h1>History</h1>
+<div id="historyContainer"></div>
+
+</body>
+</html>
