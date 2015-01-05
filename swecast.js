@@ -124,7 +124,7 @@ if (!window.SweCast) {
 		},
 
 		requestSession: function() {
-			if (chrome.cast) {
+			if (window.chrome && window.chrome.cast && window.chrome.cast.isAvailable) {
 				this.setStatus('Select chromecast device...');
 				chrome.cast.requestSession(this.sessionListener.bind(this), this.showError.bind(this));
 			}
@@ -134,7 +134,7 @@ if (!window.SweCast) {
 			if (!this.progressUpdater && media.getEstimatedTime) {
 				this.progressUpdater = setInterval(this.onMediaStatusUpdate.bind(this), 1000);
 			}
-			this.setStatus('Media discovered');
+			this.setStatus('Playing...');
 
 			this.currentMedia = media;
 
@@ -242,7 +242,7 @@ if (!window.SweCast) {
 		},
 	
 		loadVideo: function() {
-			this.setStatus('Loading video');
+			this.setStatus('Loading video...');
 
 			if (this.requestWebPage) {
 				this.session.sendMessage('urn:x-cast:com.google.cast.sample.helloworld', '<script language="javascript">window.location.href="'+this.requestUrl+'";</script>', this.onMediaDiscovered.bind(this), this.showError.bind(this));
@@ -326,6 +326,7 @@ if (!window.SweCast) {
 
 				this.statusWindow.upper = $('<div>').css({
 					backgroundColor: 'rgba(255,255,255,0.8)',
+					boxSizing: 'content-box',
 					color: '#2D3E50',
 					width: '380px',
 					height: '20px',
@@ -445,7 +446,9 @@ if (!window.SweCast) {
 		},
 
 		setStatus: function(msg) {
-			this.statusWindow.statusText.text(msg);
+			if (this.statusWindow) {
+				this.statusWindow.statusText.text(msg);
+			}
 		},
 
 		logVideo: function(vidUrl) {
@@ -770,11 +773,11 @@ if (!window.SweCast) {
 }
 
 if (!window.chrome || !window.chrome.cast) {
-	loadScript('https://www.gstatic.com/cv/js/sender/v1/cast_sender.js');
+	loadScript('//www.gstatic.com/cv/js/sender/v1/cast_sender.js');
 }
 
 if (!window['$']) {
-	loadScript('http://code.jquery.com/jquery-2.1.1.min.js', SweCast.init.bind(SweCast));
+	loadScript('//code.jquery.com/jquery-2.1.1.min.js', SweCast.init.bind(SweCast));
 } else {
 	SweCast.init();
 }
