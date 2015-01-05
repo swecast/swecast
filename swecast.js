@@ -247,6 +247,10 @@ if (!window.SweCast) {
 		loadVideo: function() {
 			this.setStatus('Loading video...');
 
+			if (!this.requestTitle) {
+				this.requestTitle = this.storedTitle;
+			}
+
 			if (this.requestWebPage) {
 				this.session.sendMessage('urn:x-cast:com.google.cast.sample.helloworld', '<script language="javascript">window.location.href="'+this.requestUrl+'";</script>', this.onMediaDiscovered.bind(this), this.showError.bind(this));
 			} else {
@@ -280,6 +284,21 @@ if (!window.SweCast) {
 			if (msg.data.castVideo) {
 				this.requestHost = msg.data.castVideo.host;
 				this.play(msg.data.castVideo.url, msg.data.castVideo.title);
+			} else if (msg.data.storedTitle) {
+				this.storedTitle = msg.data.storedTitle;
+			}
+		},
+
+		storeTitle: function(){
+			this.storedTitle = document.title;
+			this.sendTitle();
+		},
+
+		sendTitle: function() {
+			if (this.storedTitle && this.userStorage) {
+				this.userStorage.postMessage({
+					storeTitle: this.storedTitle
+				}, '*');
 			}
 		},
 		
@@ -289,9 +308,6 @@ if (!window.SweCast) {
 				window.addEventListener("message", this.onMessage.bind(this), false);
 
 				var userStorageUrl = 'https://rawgit.com/swecast/swecast/master/user_storage.html';
-				if (window.location.host==='localhost:8080') {
-					userStorageUrl = 'http://localhost:8080/user_storage.html';
-				}
 				var userStorageIframe = $('<iframe>')
 				.attr('src', userStorageUrl)
 				.css({
@@ -305,6 +321,7 @@ if (!window.SweCast) {
 				.bind('load', function(){
 					var el = userStorageIframe.get(0);
 					SweCast.userStorage = el.contentWindow || el;
+					SweCast.sendTitle();
 				});
 
 				this.statusWindow = document.createElement('div');
@@ -686,6 +703,7 @@ if (!window.SweCast) {
 			'tv8play.se': 'tv3play.se',
 			'tv10play.se': 'tv3play.se',
 			'swefilmer.com': function() {
+				SweCast.storeTitle();
 				SweCast.castIframe('swefilmer.info');
 				SweCast.castIframe('vidor.me');
 			},
@@ -704,7 +722,7 @@ if (!window.SweCast) {
 			'vidor.me': function(){
 				if (window.jwplayer) {
 					var url = jwplayer("player").getPlaylist()[0].file;
-					SweCast.play(url, "Swefilmer");
+					SweCast.play(url);
 					return;
 				}
 
@@ -731,7 +749,7 @@ if (!window.SweCast) {
 				var video = SweCast.xpath('//source');
 
 				if (video && video.attr('src')) {
-					SweCast.play(video.attr('src'), "Swefilmer");
+					SweCast.play(video.attr('src'));
 					return;
 				}
 
@@ -746,14 +764,14 @@ if (!window.SweCast) {
 
 				if (vkvars) {
 					var url = vkvars['url720'] || vkvars['url480'] || vkvars['url360'] || vkvars['url240'];
-					SweCast.play(url, "Swefilmer");
+					SweCast.play(url);
 				}
 			},
 			'swefilmer.info': function() {
 				if (window.jwplayer) {
 					var url = jwplayer("player").getPlaylist()[0].file;
 					if (url) {
-						SweCast.play(url, "Swefilmer");
+						SweCast.play(url);
 						return;
 					}
 				}

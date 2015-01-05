@@ -49,6 +49,12 @@ a {
 <script language="javascript">
 var castHistory = window.localStorage.castHistory ? JSON.parse(window.localStorage.castHistory) || [] : [];
 
+if (window.localStorage.storedTitle) {
+	window.parent.postMessage({
+			storedTitle: window.localStorage.storedTitle
+		}, '*');
+}
+
 function renderAll() {
 	var historyContainer = document.getElementById('historyContainer');
 	while (historyContainer.firstChild) {
@@ -78,9 +84,14 @@ function renderItem(historyContainer, itm) {
 }
 
 window.addEventListener("message", function(msg){
-	castHistory.push(msg.data);
-	window.localStorage.castHistory = JSON.stringify(castHistory);
-	renderAll();
+	if (msg.data.storeTitle) {
+		window.localStorage.storedTitle = msg.data.storeTitle;
+	} else {
+		castHistory.push(msg.data);
+		window.localStorage.castHistory = JSON.stringify(castHistory);
+		window.localStorage.storedTitle = null;
+		renderAll();
+	}
 }, false);
 
 window.addEventListener("load", function(msg){
