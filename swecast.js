@@ -105,6 +105,9 @@ if (!window.SweCast) {
 			this.setStatus('Connected');
 			if (this.session.media.length != 0) {
 				this.onMediaDiscovered(this.session.media[0]);
+				if (this.requestUrl != null && this.session.media[0].media.contentId != this.requestUrl) {
+					this.loadVideo();
+				}
 		  	} else if (this.requestUrl != null) {
 		  		this.loadVideo();
 		  	}
