@@ -806,11 +806,11 @@ if (!window.SweCast) {
 }
 
 if (!window.chrome || !window.chrome.cast) {
-	loadScript('//www.gstatic.com/cv/js/sender/v1/cast_sender.js');
+	loadScript('https://www.gstatic.com/cv/js/sender/v1/cast_sender.js');
 }
 
 if (!window['$']) {
-	loadScript('//code.jquery.com/jquery-2.1.1.min.js', SweCast.init.bind(SweCast));
+	loadScript('https://code.jquery.com/jquery-2.1.1.min.js', SweCast.init.bind(SweCast));
 } else {
 	SweCast.init();
 }
