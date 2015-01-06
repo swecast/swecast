@@ -221,22 +221,14 @@ if (!window.SweCast) {
 			}
 		},
 
-		play: function(url, title, webPage) {
+		play: function(url, title) {
 		  	this.requestUrl = url;
 		  	this.requestTitle = title;
-		  	this.requestWebPage = webPage;
-		  	if (this.requestWebPage) {
+		  	if (this.requestUrl.indexOf('HTML:') === 0) {
 		  		this.appId = '02893205';
 		  	}
 		  	if (this.noCast === true) {
-		  		var body = $(document.body);
-		  		body.empty();
-		  		var vid = $('<video src="'+url+'" controls></video>');
-		  		vid.css({
-			  			width: '90%',
-			  			height: '90%'
-			  		});
-		  		vid.appendTo(body);
+		  		window.location.href = url;
 		  	} else if (this.session) {
 				this.loadVideo();
 			} else {
@@ -251,8 +243,9 @@ if (!window.SweCast) {
 				this.requestTitle = this.storedTitle;
 			}
 
-			if (this.requestWebPage) {
-				this.session.sendMessage('urn:x-cast:com.google.cast.sample.helloworld', '<script language="javascript">window.location.href="'+this.requestUrl+'";</script>', this.onMediaDiscovered.bind(this), this.showError.bind(this));
+			if (this.requestUrl.indexOf('HTML:') === 0) {
+				var url = this.requestUrl.substring(5);
+				this.session.sendMessage('urn:x-cast:com.google.cast.sample.helloworld', '<head><meta http-equiv="refresh" content="0;URL=\''+url+'\'" /></head>', this.onMediaDiscovered.bind(this), this.showError.bind(this));
 			} else {
 				var mediaInfo = new chrome.cast.media.MediaInfo(this.requestUrl, "video/mp4");
 				mediaInfo.metadata = new chrome.cast.media.MovieMediaMetadata();
@@ -270,7 +263,6 @@ if (!window.SweCast) {
 			this.logVideo(this.requestUrl);
 			this.requestUrl = null;
 			this.requestTitle = null;
-			this.requestWebPage = null;
 			this.requestHost = null;
 		},
 
@@ -717,7 +709,7 @@ if (!window.SweCast) {
 				});
 			},
 			'videoapi.my.mail.ru': function(){
-				SweCast.play(window.location+'?autoplay=true', null, true);
+				SweCast.play('HTML:'+window.location+'?autoplay=true');
 			},
 			'vidor.me': function(){
 				if (window.jwplayer) {
