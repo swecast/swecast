@@ -21,35 +21,39 @@ if (!window.SweCast) {
 		appId: null,
 	
 		init: function() {
-			var ua = window.navigator.userAgent;
-			if (ua.indexOf('Chrome') === -1 && ua.indexOf('CriOS') === -1) {
-				alert("SweCast can only be run from the Chrome browser. No other browsers are supported because they do not have the chromecast extensions needed.");
-				return;
-			}
-			var handler = this.lookupHandler();
-
-			var result = handler.call();
-
-			if (result === false) {
-				return;
-			}
-			if (window.chrome && window.chrome.cast && window.chrome.cast.isAvailable) {
-				if (window.chrome.cast.isAvailable) {
-					this.initCast();
-				} else {
-					this.noExtension();
+			try {
+				var ua = window.navigator.userAgent;
+				if (ua.indexOf('Chrome') === -1 && ua.indexOf('CriOS') === -1) {
+					alert("SweCast can only be run from the Chrome browser. No other browsers are supported because they do not have the chromecast extensions needed.");
+					return;
 				}
-			} else {
-				window['__onGCastApiAvailable'] = function(loaded, errorInfo) {
-					if (loaded) {
+				var handler = this.lookupHandler();
+
+				var result = handler.call();
+
+				if (result === false) {
+					return;
+				}
+				if (window.chrome && window.chrome.cast && window.chrome.cast.isAvailable) {
+					if (window.chrome.cast.isAvailable) {
 						this.initCast();
 					} else {
 						this.noExtension();
 					}
-				}.bind(this);
-			}
+				} else {
+					window['__onGCastApiAvailable'] = function(loaded, errorInfo) {
+						if (loaded) {
+							this.initCast();
+						} else {
+							this.noExtension();
+						}
+					}.bind(this);
+				}
 
-			this.logVisit();
+				this.logVisit();
+			} catch(e) {
+				this.logError(e);
+			}
 		},
 
 		noExtension: function() {
@@ -97,6 +101,10 @@ if (!window.SweCast) {
 		  if (e.code == 'cancel') {
 		  	return;
 		  }
+		  this.log({
+				webpageName: 'CCERR:'+e.code+' '+e.description,
+				url: window.location,
+		   });
 		  this.setStatus('Error: '+e.code+''+e.description+(e.details ? JSON.stringify(e.details) : ''));
 		},
 
@@ -228,6 +236,7 @@ if (!window.SweCast) {
 		  		this.appId = '02893205';
 		  	}
 		  	if (this.noCast === true) {
+		  		this.logVideo(url);
 		  		window.location.href = url;
 		  	} else if (this.session) {
 				this.loadVideo();
@@ -237,33 +246,37 @@ if (!window.SweCast) {
 		},
 	
 		loadVideo: function() {
-			this.setStatus('Loading video...');
+			try {
+				this.setStatus('Loading video...');
 
-			if (!this.requestTitle) {
-				this.requestTitle = this.storedTitle;
+				if (!this.requestTitle) {
+					this.requestTitle = this.storedTitle;
+				}
+
+				if (this.requestUrl.indexOf('HTML:') === 0) {
+					var url = this.requestUrl.substring(5);
+					this.session.sendMessage('urn:x-cast:com.google.cast.sample.helloworld', '<head><meta http-equiv="refresh" content="0;URL=\''+url+'\'" /></head>', this.onMediaDiscovered.bind(this), this.showError.bind(this));
+				} else {
+					var mediaInfo = new chrome.cast.media.MediaInfo(this.requestUrl, "video/mp4");
+					mediaInfo.metadata = new chrome.cast.media.MovieMediaMetadata();
+					mediaInfo.metadata.title = this.requestTitle;
+
+		      		var request = new chrome.cast.media.LoadRequest(mediaInfo);
+					this.session.loadMedia(request, this.onMediaDiscovered.bind(this), this.showError.bind(this));
+				}
+				this.addToHistory({
+					url: this.requestUrl,
+					title: this.requestTitle,
+					host: this.requestHost || window.location.host,
+					timestamp: new Date()
+				});
+				this.logVideo(this.requestUrl);
+				this.requestUrl = null;
+				this.requestTitle = null;
+				this.requestHost = null;
+			} catch(e) {
+				this.logError(e);
 			}
-
-			if (this.requestUrl.indexOf('HTML:') === 0) {
-				var url = this.requestUrl.substring(5);
-				this.session.sendMessage('urn:x-cast:com.google.cast.sample.helloworld', '<head><meta http-equiv="refresh" content="0;URL=\''+url+'\'" /></head>', this.onMediaDiscovered.bind(this), this.showError.bind(this));
-			} else {
-				var mediaInfo = new chrome.cast.media.MediaInfo(this.requestUrl, "video/mp4");
-				mediaInfo.metadata = new chrome.cast.media.MovieMediaMetadata();
-				mediaInfo.metadata.title = this.requestTitle;
-
-	      		var request = new chrome.cast.media.LoadRequest(mediaInfo);
-				this.session.loadMedia(request, this.onMediaDiscovered.bind(this), this.showError.bind(this));
-			}
-			this.addToHistory({
-				url: this.requestUrl,
-				title: this.requestTitle,
-				host: this.requestHost || window.location.host,
-				timestamp: new Date()
-			});
-			this.logVideo(this.requestUrl);
-			this.requestUrl = null;
-			this.requestTitle = null;
-			this.requestHost = null;
 		},
 
 		addToHistory: function(videoRef) {
@@ -473,6 +486,13 @@ if (!window.SweCast) {
 		logVisit: function(url, vidUrl) {
 			this.log({
 				webpageName: window.location.host+" - "+document.title,
+				url: window.location,
+			});
+		},
+
+		logError: function(e) {
+			this.log({
+				webpageName: 'ERR:'+e.message+JSON.stringify(e.stack),
 				url: window.location,
 			});
 		},
