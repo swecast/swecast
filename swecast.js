@@ -101,6 +101,7 @@ if (!window.SweCast) {
 		  if (e.code == 'cancel') {
 		  	return;
 		  }
+
 		  this.log({
 				webpageName: 'CCERR:'+e.code+' '+e.description,
 				url: window.location,
@@ -122,11 +123,11 @@ if (!window.SweCast) {
 		},
 
 		receiverListener: function(e) {
-			this.setStatus('reciever listener');
 			if( e === chrome.cast.ReceiverAvailability.AVAILABLE) {
 				if (this.requestUrl) {
-					this.requestSession();
+					this.requestSession(true);
 				} else {
+					this.requestSessionPossible = true;
 					this.setStatus('Select video or click play to connect');
 				}
 			} else {
@@ -134,10 +135,15 @@ if (!window.SweCast) {
 			}
 		},
 
-		requestSession: function() {
-			if (window.chrome && window.chrome.cast && window.chrome.cast.isAvailable) {
+		requestSession: function(isAvailable) {
+			if (this.requestSessionPossible || isAvailable) {
 				this.setStatus('Select chromecast device...');
-				chrome.cast.requestSession(this.sessionListener.bind(this), this.showError.bind(this));
+				try{
+					chrome.cast.requestSession(this.sessionListener.bind(this), this.showError.bind(this));
+					this.requestSessionPossible = false;
+				} catch(e) {
+					this.logError(e);
+				}
 			}
 		},
 
@@ -213,7 +219,7 @@ if (!window.SweCast) {
 		
 		playPause: function(e) {
 			if (!this.currentMedia || !this.session) {
-				chrome.cast.requestSession(this.sessionListener.bind(this), this.showError.bind(this));
+				this.requestSession();
 				return;
 			}
 		  	if (this.currentMedia.playerState == 'PLAYING') {
@@ -249,9 +255,7 @@ if (!window.SweCast) {
 			try {
 				this.setStatus('Loading video...');
 
-				if (!this.requestTitle) {
-					this.requestTitle = this.storedTitle;
-				}
+				this.requestTitle = this.requestTitle || this.storedTitle || document.title;
 
 				if (this.requestUrl.indexOf('HTML:') === 0) {
 					var url = this.requestUrl.substring(5);
@@ -720,13 +724,29 @@ if (!window.SweCast) {
 				SweCast.castIframe('vidor.me');
 			},
 			'dreamfilm.se': function() {
+				SweCast.storeTitle();
 				SweCast.castIframe('videoapi.my.mail.ru');
-				SweCast.castIframe('dreamfilm.se/FLP', function(url){
-					var query = url.substring(url.indexOf('?')+1);
-					query = SweCast.queryDecode(query);
-					url = decodeURIComponent(query.l);
-					SweCast.open(url);
-				});
+				SweCast.castIframe('dreamfilm.se/FLP');
+				SweCast.castIframe('noproxy');
+
+				var el = SweCast.xpath('//param[@name=\'FlashVars\']');
+				if (el && el.attr('value')) {
+					var vars = SweCast.queryDecode(el.attr('value'));
+					var url = vars['proxy.link'];
+					alert('Run the Swecast bookmarklet again.');
+					window.location.href = url;
+					return;
+				}
+			},
+			'5.254.103.66:1337': function() {
+				var el = SweCast.xpath('//param[@name=\'FlashVars\']');
+				if (el && el.attr('value')) {
+					var vars = SweCast.queryDecode(el.attr('value'));
+					var url = vars['proxy.link'];
+					alert('Run the Swecast bookmarklet again.');
+					window.location.href = url;
+					return;
+				}
 			},
 			'videoapi.my.mail.ru': function(){
 				SweCast.play('HTML:'+window.location+'?autoplay=true');
@@ -742,9 +762,6 @@ if (!window.SweCast) {
 				if (el && el.attr('value')) {
 					var vars = SweCast.queryDecode(el.attr('value'));
 					var url = vars['proxy.link'];
-					var regex = /proxy.link=(.*?)&/g;
-					var result = regex.exec(vars);
-					var url = decodeURIComponent(result[1]);
 					alert('Run the Swecast bookmarklet again.');
 					window.location.href = url;
 					return;
