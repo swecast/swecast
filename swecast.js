@@ -14,11 +14,19 @@ function loadScript(url, cb) {
 }
 
 if (!window.SweCast) {
+
+	if (window.chrome && window.chrome.cast) {
+		// Unload the cast extension, so we can load it and get the session
+		window.chrome.cast = undefined;
+	}
+
 	SweCast = {
 
 		session: null,
 
 		appId: null,
+
+		videoFound: false,
 	
 		init: function() {
 			try {
@@ -551,16 +559,24 @@ if (!window.SweCast) {
 		},
 		openIframe: function() {
 			var url = null;
+			var cnt = 0;
 			SweCast.eachXpath('//iframe', function(el){
 				url = el.attr('src');
+				cnt++;
 			});
 
-			if (url) {
+			if (url && cnt === 1) {
 				SweCast.open(url);
 			}
 		},
 		castBtn: function(el, fn) {
 			SweCast.videoFound = true;
+
+			if (el.attr('castBtnAdded') === 'true') {
+				return;
+			}
+
+			el.attr('castBtnAdded', 'true');
 
 			if (el.css('position') === 'absolute') {
 				el.css({
@@ -636,7 +652,33 @@ if (!window.SweCast) {
 
 		handlers: {
 			defaultHandler: function(){
-				SweCast.videoFound = false;
+
+				if (window.vkfixz) {
+					alert('Run the Swecast bookmarklet again.');
+					document.write(decodeURIComponent(window.vkfixz));
+					return;
+				}
+
+				var el = SweCast.xpath('//param[@name=\'FlashVars\']');
+				if (el && el.attr('value')) {
+					var vars = SweCast.queryDecode(el.attr('value'));
+					var url = vars['proxy.link'];
+					if (url) {
+						url = url.replace(/\&amp;/g, '&');
+						alert('Run the Swecast bookmarklet again.');
+						window.location.href = url;
+						return;
+					}
+				}
+
+				if (window.jwplayer) {
+					var url = jwplayer("player").getPlaylist()[0].file;
+					if (url) {
+						SweCast.play(url);
+						return;
+					}
+				}
+
 				SweCast.eachXpath('//video', function(el){
 					SweCast.castBtn(el, function(){
 						var src = el.attr('src') || el.children('source[type=\'video/mp4\']').attr('src');
@@ -644,27 +686,67 @@ if (!window.SweCast) {
 					});
 				});
 
+				var video = SweCast.xpath('//source');
+				if (video && video.attr('src')) {
+					SweCast.play(video.attr('src'));
+					return;
+				}
+
+				var vkvars = window.vars;
+				if (!vkvars) {
+					var el = SweCast.xpath('//param[@name=\'flashvars\']');
+					if (el && el.attr('value')) {
+						vkvars = el.attr('value');
+						vkvars = SweCast.queryDecode(vkvars);
+					}
+				}
+				if (vkvars) {
+					var url = vkvars['url720'] || vkvars['url480'] || vkvars['url360'] || vkvars['url240'];
+					SweCast.play(url);
+					return;
+				}
+
+
+				SweCast.castIframe('swefilmer.info');
+				SweCast.castIframe('vidor.me');
+				SweCast.castIframe('vkfix.com');
+				SweCast.castIframe('videoapi.my.mail.ru');
+				SweCast.castIframe('dreamfilm.se/FLP');
+				SweCast.castIframe('noproxy');
+
 				SweCast.castIframe('player.vimeo.com');
 
 				if (!SweCast.videoFound) {
+					SweCast.openIframe();
 					SweCast.logUnsupported();					
 				}
 			},
 			'tv4.se': function(){
+				var playTv4 = function(videoId) {
+					SweCast.ajax('https://prima.tv4play.se/api/mobil/asset/'+videoId+'/play?protocol=hls&videoFormat=MP4+WEBVTTS', function(data){
+						var title = $(data).find('title').first().text();
+					  	$(data).find('url').each(function(i, url){
+						    if (i == 0) {
+						    	var url = $(this).text();
+						    	SweCast.play(url, title);
+						    }
+						});
+					});
+				};
+
 				SweCast.eachXpath('//figure[@data-video-id]', function(el){
 					SweCast.castBtn(el, function(){
-						SweCast.ajax('https://prima.tv4play.se/api/mobil/asset/'+el.attr('data-video-id')+'/play?protocol=hls&videoFormat=MP4+WEBVTTS', function(data){
-							var title = $(data).find('title').first().text();
-						  	$(data).find('url').each(function(i, url){
-							    if (i == 0) {
-							    	var url = $(this).text();
-							    	SweCast.play(url, title);
-							    }
-							});
-						});
+						playTv4(el.attr('data-video-id'));
+					});
+				});
+
+				SweCast.eachXpath('//div[@data-vid]', function(el){
+					SweCast.castBtn(el, function(){
+						playTv4(el.attr('data-vid'));
 					});
 				});
 			},
+			'tv4play.se': 'tv4.se',
 			'svt.se': function(){
 				SweCast.eachXpath('//a[@data-json-href]', function(el){
 					SweCast.castBtn(el, function(){
@@ -720,54 +802,14 @@ if (!window.SweCast) {
 			'tv10play.se': 'tv3play.se',
 			'swefilmer.com': function() {
 				SweCast.storeTitle();
-				SweCast.castIframe('swefilmer.info');
-				SweCast.castIframe('vidor.me');
+				SweCast.handlers.defaultHandler();
 			},
 			'dreamfilm.se': function() {
 				SweCast.storeTitle();
-				SweCast.castIframe('videoapi.my.mail.ru');
-				SweCast.castIframe('dreamfilm.se/FLP');
-				SweCast.castIframe('noproxy');
-
-				var el = SweCast.xpath('//param[@name=\'FlashVars\']');
-				if (el && el.attr('value')) {
-					var vars = SweCast.queryDecode(el.attr('value'));
-					var url = vars['proxy.link'];
-					alert('Run the Swecast bookmarklet again.');
-					window.location.href = url;
-					return;
-				}
-			},
-			'5.254.103.66:1337': function() {
-				var el = SweCast.xpath('//param[@name=\'FlashVars\']');
-				if (el && el.attr('value')) {
-					var vars = SweCast.queryDecode(el.attr('value'));
-					var url = vars['proxy.link'];
-					alert('Run the Swecast bookmarklet again.');
-					window.location.href = url;
-					return;
-				}
+				SweCast.handlers.defaultHandler();
 			},
 			'videoapi.my.mail.ru': function(){
 				SweCast.play('HTML:'+window.location+'?autoplay=true');
-			},
-			'vidor.me': function(){
-				if (window.jwplayer) {
-					var url = jwplayer("player").getPlaylist()[0].file;
-					SweCast.play(url);
-					return;
-				}
-
-				var el = SweCast.xpath('//param[@name=\'FlashVars\']');
-				if (el && el.attr('value')) {
-					var vars = SweCast.queryDecode(el.attr('value'));
-					var url = vars['proxy.link'];
-					alert('Run the Swecast bookmarklet again.');
-					window.location.href = url;
-					return;
-				}
-
-				SweCast.openIframe();
 			},
 			'vk.com': function(){
 
@@ -775,37 +817,7 @@ if (!window.SweCast) {
 					marginTop: '40px'
 				});
 
-				var video = SweCast.xpath('//source');
-
-				if (video && video.attr('src')) {
-					SweCast.play(video.attr('src'));
-					return;
-				}
-
-				var vkvars = window.vars;
-				if (!vkvars) {
-					var el = SweCast.xpath('//param[@name=\'flashvars\']');
-					if (el && el.attr('value')) {
-						vkvars = el.attr('value');
-						vkvars = SweCast.queryDecode(vkvars);
-					}
-				}
-
-				if (vkvars) {
-					var url = vkvars['url720'] || vkvars['url480'] || vkvars['url360'] || vkvars['url240'];
-					SweCast.play(url);
-				}
-			},
-			'swefilmer.info': function() {
-				if (window.jwplayer) {
-					var url = jwplayer("player").getPlaylist()[0].file;
-					if (url) {
-						SweCast.play(url);
-						return;
-					}
-				}
-
-				SweCast.openIframe();
+				SweCast.handlers.defaultHandler();
 			},
 			'': function() {
 				alert('You need to be on a website with videos when running the SweCast bookmarlet.');
