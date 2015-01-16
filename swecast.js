@@ -136,7 +136,7 @@ if (!window.SweCast) {
 					this.requestSession(true);
 				} else {
 					this.requestSessionPossible = true;
-					this.setStatus('Select video or click play to connect');
+					this.setStatus('Click the cast icon above a video');
 				}
 			} else {
 				this.setStatus('Unavailable, turn on your chrome cast');
@@ -264,6 +264,10 @@ if (!window.SweCast) {
 				this.setStatus('Loading video...');
 
 				this.requestTitle = this.requestTitle || this.storedTitle || document.title;
+
+				if (this.requestTitle == null || this.requestTitle === 'null') {
+					this.requestTitle = document.title;
+				}
 
 				if (this.requestUrl.indexOf('HTML:') === 0) {
 					var url = this.requestUrl.substring(5);
@@ -578,6 +582,21 @@ if (!window.SweCast) {
 
 			el.attr('castBtnAdded', 'true');
 
+			var videoEl = null;
+			var domEl = el.get();
+			if (el.prop("tagName") === 'VIDEO') {
+				videoEl = el;
+			} else {
+				videoEl = el.children('video')
+			}
+			if (videoEl) {
+				videoEl.one('play', function(e) {
+					var src = videoEl.attr('src') || videoEl.children('source[type=\'video/mp4\']').attr('src') || videoEl.children('source').attr('src');
+					SweCast.play(src, document.title);
+					e.currentTarget.pause();
+				});
+			}
+
 			if (el.css('position') === 'absolute') {
 				el.css({
 					marginTop: '30px'
@@ -679,19 +698,6 @@ if (!window.SweCast) {
 					}
 				}
 
-				SweCast.eachXpath('//video', function(el){
-					SweCast.castBtn(el, function(){
-						var src = el.attr('src') || el.children('source[type=\'video/mp4\']').attr('src');
-				    	SweCast.play(src, document.title);
-					});
-				});
-
-				var video = SweCast.xpath('//source');
-				if (video && video.attr('src')) {
-					SweCast.play(video.attr('src'));
-					return;
-				}
-
 				var vkvars = window.vars;
 				if (!vkvars) {
 					var el = SweCast.xpath('//param[@name=\'flashvars\']');
@@ -706,6 +712,12 @@ if (!window.SweCast) {
 					return;
 				}
 
+				SweCast.eachXpath('//video', function(el){
+					SweCast.castBtn(el, function(){
+						var src = el.attr('src') || el.children('source[type=\'video/mp4\']').attr('src') || el.children('source').attr('src');
+				    	SweCast.play(src, document.title);
+					});
+				});
 
 				SweCast.castIframe('swefilmer.info');
 				SweCast.castIframe('vidor.me');
