@@ -589,11 +589,16 @@ if (!window.SweCast) {
 			} else {
 				videoEl = el.children('video')
 			}
-			if (videoEl) {
+			if (videoEl && videoEl.length) {
 				videoEl.one('play', function(e) {
-					var src = videoEl.attr('src') || videoEl.children('source[type=\'video/mp4\']').attr('src') || videoEl.children('source').attr('src');
-					SweCast.play(src, document.title);
+					fn.call();
 					e.currentTarget.pause();
+				});
+			} else {
+				el.one('click', function(e) {
+					e.stopPropagation();
+					e.preventDefault();
+					fn.call();					
 				});
 			}
 
