@@ -273,7 +273,7 @@ if (!window.SweCast) {
 					var url = this.requestUrl.substring(5);
 					this.session.sendMessage('urn:x-cast:com.google.cast.sample.helloworld', '<head><meta http-equiv="refresh" content="0;URL=\''+url+'\'" /></head>', this.onMediaDiscovered.bind(this), this.showError.bind(this));
 				} else {
-					var mediaInfo = new chrome.cast.media.MediaInfo(this.requestUrl, "video/mp4");
+					var mediaInfo = new chrome.cast.media.MediaInfo(this.requestUrl, 'video/mp4');
 					mediaInfo.metadata = new chrome.cast.media.MovieMediaMetadata();
 					mediaInfo.metadata.title = this.requestTitle;
 
@@ -696,10 +696,16 @@ if (!window.SweCast) {
 				}
 
 				if (window.jwplayer) {
-					var url = jwplayer("player").getPlaylist()[0].file;
-					if (url) {
-						SweCast.play(url);
-						return;
+					var player = window.jwplayer("player") || window.jwplayer();
+					if (player && player.getPlaylist) {
+						var pl = player.getPlaylist();
+						if (pl && pl.length && pl[0]) {
+							var url = pl[0].file;
+							if (url) {
+								SweCast.play(url);
+								return;
+							}
+						}
 					}
 				}
 
@@ -730,6 +736,8 @@ if (!window.SweCast) {
 				SweCast.castIframe('videoapi.my.mail.ru');
 				SweCast.castIframe('dreamfilm.se/FLP');
 				SweCast.castIframe('noproxy');
+				SweCast.castIframe('sievk.info');
+
 
 				SweCast.castIframe('player.vimeo.com');
 
@@ -773,6 +781,9 @@ if (!window.SweCast) {
 									SweCast.play(ref.url, data.context.title);
 								}
 							});
+							if (!SweCast.requestUrl) {
+								SweCast.setStatus('Video not available in MP4');
+							}
 						});
 					});
 				});
@@ -798,6 +809,9 @@ if (!window.SweCast) {
 									SweCast.play(ref.source, data.title);
 								}
 							});
+							if (!SweCast.requestUrl) {
+								SweCast.setStatus('Video not available in MP4');
+							}
 						});
 					});
 				});
