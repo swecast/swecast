@@ -733,6 +733,7 @@ if (!window.SweCast) {
 				SweCast.castIframe('swefilmer.info');
 				SweCast.castIframe('vidor.me');
 				SweCast.castIframe('vkfix.com');
+				SweCast.castIframe('vkban.com');
 				SweCast.castIframe('videoapi.my.mail.ru');
 				SweCast.castIframe('dreamfilm.se/FLP');
 				SweCast.castIframe('noproxy');
