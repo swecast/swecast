@@ -732,6 +732,7 @@ if (!window.SweCast) {
 
 				SweCast.castIframe('swefilmer.info');
 				SweCast.castIframe('vidor.me');
+				SweCast.castIframe('vk.com');
 				SweCast.castIframe('vkfix.com');
 				SweCast.castIframe('vkban.com');
 				SweCast.castIframe('videoapi.my.mail.ru');
