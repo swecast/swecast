@@ -841,6 +841,7 @@ if (!window.SweCast) {
 				SweCast.storeTitle();
 				SweCast.handlers.defaultHandler();
 			},
+			'dreamfilmhd.com': 'dreamfilm.se',
 			'videoapi.my.mail.ru': function(){
 				SweCast.play('HTML:'+window.location+'?autoplay=true');
 			},
