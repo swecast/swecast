@@ -549,12 +549,16 @@ if (!window.SweCast) {
 			alert('Run the Swecast bookmarklet again.');
 			window.location.href = url;
 		},
-		castIframe: function(urlPrefix, cb) {
+		castIframe: function(urlPrefix, cb, regex, replace) {
 			cb = cb || SweCast.open;
 
 			SweCast.eachXpath('//iframe[contains(@src, \''+urlPrefix+'\')]', function(el){
 				SweCast.castBtn(el, function(){
-					cb(el.attr('src'));
+          var url = el.attr('src');
+          if (regex && replace) {
+            url = url.replace(regex, replace);
+          }
+					cb(url);
 				});
 			});
 		},
@@ -615,7 +619,8 @@ if (!window.SweCast) {
 				left: 0,
 				zIndex: 99999,
 				cursor:'pointer',
-				visibility: 'visible'
+        visibility: 'visible',
+				opacity: 1
 			})
 			.click(function(e){
 				e.stopPropagation();
@@ -629,6 +634,7 @@ if (!window.SweCast) {
 				backgroundColor: '#000',
 				width: '100%',
 				visibility: 'visible',
+        opacity: 1,
 				textAlign: 'left'
 			})
 			.wrap('<div>').parent()
@@ -722,7 +728,7 @@ if (!window.SweCast) {
 
 				SweCast.eachXpath('//video', function(el){
 					SweCast.castBtn(el, function(){
-						var src = el.attr('src') || el.children('source[type=\'video/mp4\']').attr('src') || el.children('source').attr('src');
+              var src = el.attr('src') || el.children('source[type=\'video/mp4\']').attr('src') || el.children('source').attr('src');
 				    	SweCast.play(src, document.title);
 					});
 				});
@@ -738,7 +744,7 @@ if (!window.SweCast) {
 				SweCast.castIframe('sievk.info');
 
 
-				SweCast.castIframe('player.vimeo.com');
+				SweCast.castIframe('player.vimeo.com', SweCast.open, /player.vimeo.com\/video\/(\d+).*/, 'vimeo.com/$1');
 
 				if (!SweCast.videoFound) {
 					SweCast.openIframe();
@@ -860,7 +866,21 @@ if (!window.SweCast) {
 			},
 			'localhost:8080': function(){
 
-			}
+			},
+      'vimeo.com': function() {
+        SweCast.eachXpath('//video', function(el){
+          var videoId = SweCast.xpath('//link[@rel="canonical"]').attr('href').substring(1);
+          el.parent().css({
+            opacity: 1
+          });
+          SweCast.castBtn(el, function(){
+            SweCast.ajax('https://player.vimeo.com/video/'+videoId+'/config', function(data) {
+              var url = data.request.files.progressive[0].url
+              SweCast.play(url, document.title);
+            });
+          });
+        });
+      }
 		}
 	};
 }
